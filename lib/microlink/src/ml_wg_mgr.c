@@ -30,6 +30,7 @@
 #include "mbedtls/base64.h"
 #include <string.h>
 #include <errno.h>
+#include "ml_lwip_locked.h"  /* X4 HOMESYNC PATCH: lwIP core locking */
 
 /* Forward declaration for zero-copy path */
 extern void wireguardif_network_rx(void *arg, struct udp_pcb *pcb,

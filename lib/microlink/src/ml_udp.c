@@ -18,6 +18,7 @@
 #include "lwip/netif.h"
 #include "lwip/ip_addr.h"
 #include <string.h>
+#include "ml_lwip_locked.h"  /* X4 HOMESYNC PATCH: lwIP core locking */
 
 static const char *TAG = "ml_udp";
 
