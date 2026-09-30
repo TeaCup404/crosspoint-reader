@@ -4,7 +4,7 @@
   reader.py status
   reader.py screenshot out.png          (macOS: converted with sips)
   reader.py light 60 50                 (brightness 0 = off, warm 0-100)
-  reader.py sync
+  reader.py sync [ts]                   (ts: skip the home LAN and sync through Tailscale)
   reader.py theme 4                     (0 Classic, 1 Lyra, 2 Lyra 3 covers, 3 RoundedRaff, 4 Cover grid)
   reader.py home
   reader.py kosync [url] [user]         (KOReader progress sync; prompts for the password)
@@ -99,7 +99,7 @@ def main():
     elif op == "light":
         print(command(port, f"CMD:LIGHT {args[0]} {args[1] if len(args) > 1 else -1}"))
     elif op == "sync":
-        print(command(port, "CMD:SYNC"))
+        print(command(port, "CMD:SYNC TS" if args[:1] == ["ts"] else "CMD:SYNC"))
     elif op == "theme":
         print(command(port, f"CMD:THEME {args[0]}"))
     elif op == "kosync":

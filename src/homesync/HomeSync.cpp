@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cctype>
 #include <ctime>
+#include <utility>
 #include <vector>
 
 #include "CrossPointSettings.h"
@@ -156,6 +157,8 @@ Feed fetch(const OpdsServer& server, const std::string& url) {
 
 }  // namespace
 
+bool forceTailnetOnce = false;
+
 bool autoSyncDue() {
   if (!OPDS_STORE.hasServers()) return false;
   const State s = loadState();
@@ -193,10 +196,12 @@ Result run(const OpdsServer& server, const std::function<void(const char*)>& sta
   viaTailnet = false;
   std::string root = server.url;
   status("Looking for shelf...");
-  Feed shelves = fetch(server, UrlUtils::buildUrl(root, SHELF_INDEX_PATH));
+  const bool forced = std::exchange(forceTailnetOnce, false);
+  Feed shelves;
+  if (!forced) shelves = fetch(server, UrlUtils::buildUrl(root, SHELF_INDEX_PATH));
 #if HOMESYNC
   if (!shelves.ok && tailnet::configured()) {
-    LOG_INF("SYNC", "Home library unreachable, trying Tailscale");
+    LOG_INF("SYNC", forced ? "Forced Tailscale sync (test)" : "Home library unreachable, trying Tailscale");
     if (!tailnet::up(state.tailnetIp.c_str(), status, cancel)) {
       result.error = "Tailscale did not connect";
       return result;

@@ -603,7 +603,7 @@ void setup() {
 // and drive the reader without typing on it. Passwords are never logged.
 //   CMD:WIFI_ADD <ssid>\t<password>
 //   CMD:OPDS_ADD <name>\t<url>\t<user>\t<password>   (same url = update)
-//   CMD:SYNC                  start "Sync library"
+//   CMD:SYNC [TS]             start "Sync library" (TS: skip the LAN, test Tailscale)
 //   CMD:LIGHT <0-100> <warm 0-100>   brightness 0 = off
 //   CMD:THEME <0-4>           4 = Cover grid (PSRAM only)
 //   CMD:KOSYNC <url>\t<user>\t<password>   KOReader progress sync server
@@ -639,6 +639,7 @@ static void handleHomesyncCommand(const String& cmd) {
     ok = ok && OPDS_STORE.saveToFile();
     logSerial.printf("HS:OPDS_ADD %s %s\n", server.url.c_str(), ok ? "OK" : "FAIL");
   } else if (name == "SYNC") {
+    homesync::forceTailnetOnce = f.size() == 1 && f[0] == "TS";
     if (!OPDS_STORE.hasServers()) {
       logSerial.printf("HS:SYNC FAIL no OPDS server\n");
       return;

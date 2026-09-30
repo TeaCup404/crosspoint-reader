@@ -49,6 +49,10 @@ using ProgressFn = std::function<void(const Progress&)>;
 // are older than autoHours.
 bool autoSyncDue();
 
+// Test hook (CMD:SYNC TS): the next run skips the home LAN and goes straight
+// through Tailscale, so the tunnel can be checked from home.
+extern bool forceTailnetOnce;
+
 // Records that an automatic sync was started, so a failing one (e.g. away from
 // any known Wi-Fi) is not retried on every wake.
 void noteAutoAttempt();
