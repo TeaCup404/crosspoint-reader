@@ -33,6 +33,10 @@
 #include "activities/Activity.h"
 #include "activities/ActivityManager.h"
 #include "activities/settings/SdFirmwareUpdateActivity.h"
+#if HOMESYNC
+#include "activities/homesync/HomeSyncActivity.h"
+#include "homesync/HomeSync.h"
+#endif
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "platform/UsbSerialJtagHandoff.h"
@@ -551,7 +555,18 @@ void setup() {
              mappedInputManager.isPressed(MappedInputManager::Button::Back) || APP_STATE.readerActivityLoadCount > 0) {
     // Boot to home screen if no book is open, last sleep was not from reader, back button is held, or reader activity
     // crashed (indicated by readerActivityLoadCount > 0)
+#if HOMESYNC
+    // Wake-to-home: pull new books first when the last sync is old enough.
+    // Resuming a book never waits on this.
+    if (homesync::autoSyncDue()) {
+      activityManager.replaceActivity(
+          std::make_unique<HomeSyncActivity>(renderer, mappedInputManager, OPDS_STORE.getServers()[0], true));
+    } else {
+      activityManager.goHome(HomeMenuItem::NONE, needsWakeRefresh);
+    }
+#else
     activityManager.goHome(HomeMenuItem::NONE, needsWakeRefresh);
+#endif
   } else {
     // Clear app state to avoid getting into a boot loop if the epub doesn't load
     const auto path = APP_STATE.openEpubPath;

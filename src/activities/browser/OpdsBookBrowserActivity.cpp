@@ -15,6 +15,10 @@
 #include "MappedInputManager.h"
 #include "SilentRestart.h"
 #include "activities/network/WifiSelectionActivity.h"
+#if HOMESYNC
+#include "activities/homesync/HomeSyncActivity.h"
+#include "homesync/HomeSync.h"
+#endif
 #include "activities/util/KeyboardEntryActivity.h"
 #include "components/UIScale.h"
 #include "components/UITheme.h"
@@ -444,6 +448,12 @@ void OpdsBookBrowserActivity::fetchFeed(const std::string& path) {
   if (feedTruncated) {
     LOG_INF("OPDS", "Feed truncated to fit memory");
   }
+#if HOMESYNC
+  // Home library sync lives at the top of the server's root catalog.
+  if (currentPath.empty()) {
+    entries.insert(entries.begin(), OpdsEntry{OpdsEntryType::NAVIGATION, "Sync library", "", homesync::SYNC_ROW_HREF, ""});
+  }
+#endif
 
   state = entries.empty() ? BrowserState::ERROR : BrowserState::BROWSING;
   if (entries.empty()) errorMessage = tr(STR_NO_ENTRIES);
@@ -476,6 +486,14 @@ void OpdsBookBrowserActivity::releaseEntries() {
 }
 
 void OpdsBookBrowserActivity::navigateToEntry(const OpdsEntry& entry) {
+#if HOMESYNC
+  if (entry.href == homesync::SYNC_ROW_HREF) {
+    // Pushed, not replaced: replacing would run onExit's Wi-Fi teardown reboot.
+    startActivityForResult(std::make_unique<HomeSyncActivity>(renderer, mappedInput, server, false),
+                           [](const ActivityResult&) {});
+    return;
+  }
+#endif
   navigationHistory.push_back(currentPath);
   // Resolve to a full URL so sub-sub-navigation retains parent path context
   const std::string feedUrl = UrlUtils::buildUrl(server.url, currentPath);
