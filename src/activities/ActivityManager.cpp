@@ -329,6 +329,8 @@ void ActivityManager::goHome(HomeMenuItem initialMenuItem, bool cleanInitialRefr
       initialMenuItem = HomeMenuItem::LIBRARY;
     } else if (activityName == "OpdsBookBrowser") {
       initialMenuItem = HomeMenuItem::OPDS_BROWSER;
+    } else if (activityName == "HomeSync") {
+      initialMenuItem = HomeMenuItem::SYNC_LIBRARY;
     } else if (activityName == "ServerDash") {
       initialMenuItem = HomeMenuItem::SERVER_DASH;
     } else if (activityName == "CrossPointWebServer") {

@@ -44,6 +44,8 @@ class HomeActivity final : public Activity {
     if (item == HomeMenuItem::OPDS_BROWSER) return hasOpdsUrl ? i : 0;
     if (hasOpdsUrl) ++i;
     // Server (x4pro-homesync) is a list-home item only; the cover-grid tabs are fixed.
+    if (item == HomeMenuItem::SYNC_LIBRARY) return hasServer ? i : 0;
+    if (hasServer) ++i;
     if (item == HomeMenuItem::SERVER_DASH) return hasServer ? i : 0;
     if (hasServer) ++i;
     if (item == HomeMenuItem::FILE_TRANSFER) return i;
@@ -58,6 +60,7 @@ class HomeActivity final : public Activity {
     if (idx == i++) return HomeMenuItem::FILE_BROWSER;
     if (idx == i++) return HomeMenuItem::LIBRARY;
     if (hasOpdsUrl && idx == i++) return HomeMenuItem::OPDS_BROWSER;
+    if (hasServer && idx == i++) return HomeMenuItem::SYNC_LIBRARY;
     if (hasServer && idx == i++) return HomeMenuItem::SERVER_DASH;
     if (idx == i++) return HomeMenuItem::FILE_TRANSFER;
     if (idx == i) return HomeMenuItem::SETTINGS_MENU;

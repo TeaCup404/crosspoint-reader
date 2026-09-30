@@ -22,6 +22,7 @@
 #include "MappedInputManager.h"
 #include "OpdsServerStore.h"
 #if HOMESYNC
+#include "activities/homesync/HomeSyncActivity.h"
 #include "activities/homesync/ServerDashActivity.h"
 #endif
 #include "RecentBooksStore.h"
@@ -36,7 +37,7 @@ int HomeActivity::getMenuItemCount() const {
   if (hasOpdsServers) {
     count++;
   }
-  if (hasServerItem()) count++;
+  if (hasServerItem()) count += 2;  // Sync library + Server
   return count;
 }
 
@@ -329,6 +330,12 @@ void HomeActivity::loop() {
         onOpdsBrowserOpen();
         break;
 #if HOMESYNC
+      case HomeMenuItem::SYNC_LIBRARY:
+        if (OPDS_STORE.hasServers()) {
+          activityManager.replaceActivity(
+              std::make_unique<HomeSyncActivity>(renderer, mappedInput, OPDS_STORE.getServers()[0], false));
+        }
+        break;
       case HomeMenuItem::SERVER_DASH:
         activityManager.replaceActivity(std::make_unique<ServerDashActivity>(renderer, mappedInput));
         break;
@@ -534,8 +541,10 @@ void HomeActivity::render(RenderLock&&) {
   }
 #if HOMESYNC
   // Server status, right after the OPDS browser (matches indexToMenuItem).
-  menuItems.insert(menuItems.begin() + (hasOpdsServers ? 3 : 2), "Server");
-  menuIcons.insert(menuIcons.begin() + (hasOpdsServers ? 3 : 2), Hotspot);
+  // Sync library + Server, right after the OPDS browser (matches indexToMenuItem).
+  const int at = hasOpdsServers ? 3 : 2;
+  menuItems.insert(menuItems.begin() + at, {"Sync library", "Server"});
+  menuIcons.insert(menuIcons.begin() + at, {Recent, Hotspot});
 #endif
 
   if (metrics.homeContinueReadingInMenu && !recentBooks.empty()) {
