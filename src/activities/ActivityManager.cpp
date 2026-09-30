@@ -376,6 +376,11 @@ bool ActivityManager::isReaderActivity() const {
          (currentActivity && currentActivity->isReaderActivity());
 }
 
+void ActivityManager::beforeSleep() {
+  for (auto& activity : stackActivities) activity->beforeSleep();
+  if (currentActivity) currentActivity->beforeSleep();
+}
+
 bool ActivityManager::handleForcedRefresh() { return currentActivity && currentActivity->handleForcedRefresh(); }
 
 bool ActivityManager::skipLoopDelay() const { return currentActivity && currentActivity->skipLoopDelay(); }

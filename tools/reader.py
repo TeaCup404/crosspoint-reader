@@ -7,6 +7,8 @@
   reader.py sync [ts]                   (ts: skip the home LAN and sync through Tailscale)
   reader.py theme 4                     (0 Classic, 1 Lyra, 2 Lyra 3 covers, 3 RoundedRaff, 4 Cover grid)
   reader.py home
+  reader.py sleep                       (sleep like the power button)
+  reader.py koauto 0|1                  (KOReader position upload on sleep: off/on)
   reader.py kosync [url] [user]         (KOReader progress sync; prompts for the password)
   reader.py tskey                      (prompts for the Tailscale auth key; not echoed)
   reader.py setup                       (prompts for Wi-Fi + library; passwords are not echoed)
@@ -112,6 +114,10 @@ def main():
         if not key.startswith("tskey-"):
             sys.exit("That does not look like a Tailscale auth key")
         print(command(port, f"CMD:TS_KEY {key}"))
+    elif op == "koauto":
+        print(command(port, f"CMD:KOSYNC_AUTO {args[0]}"))
+    elif op == "sleep":
+        print(command(port, "CMD:SLEEP"))
     elif op == "home":
         print(command(port, "CMD:HOME"))
     elif op in ("wifi", "opds", "setup"):

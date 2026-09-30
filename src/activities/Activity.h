@@ -47,6 +47,9 @@ class Activity {
   // transitions so no filesystem code races a raw SD-card owner.
   virtual bool requiresExclusiveStorageLoop() const { return false; }
   virtual bool isReaderActivity() const { return false; }
+  // Runs right before the sleep screen replaces this activity (framebuffer and
+  // loaded content are still available). x4pro-homesync: KOReader auto-upload.
+  virtual void beforeSleep() {}
   // Returns true when the activity schedules its own forced refresh.
   virtual bool handleForcedRefresh() { return false; }
   virtual bool isHomeActivity() const { return false; }

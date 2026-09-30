@@ -39,6 +39,7 @@
 #include "WifiCredentialStore.h"
 #include "activities/homesync/HomeSyncActivity.h"
 #include "homesync/HomeSync.h"
+#include "homesync/KoAuto.h"
 #include "homesync/Tailnet.h"
 #endif
 #include "components/UITheme.h"
@@ -284,7 +285,15 @@ void enterDeepSleep(bool fromTimeout = false) {
   // Commit to sleeping before goToSleep() runs the outgoing activity's onExit():
   // a WiFi activity would otherwise silentRestart() here and reboot instead.
   deepSleepInProgress = true;
+#if HOMESYNC
+  activityManager.beforeSleep();
+#endif
   activityManager.goToSleep(fromTimeout);
+#if HOMESYNC
+  // Sleep screen is up; push the captured reading position (needs SD + Wi-Fi,
+  // so before both are shut down below).
+  homesync::koauto::uploadCaptured();
+#endif
 
   if (isQuickResumeSleep) {
     saveSleepFrameBuffer();
@@ -609,8 +618,10 @@ void setup() {
 //   CMD:LIGHT <0-100> <warm 0-100>   brightness 0 = off
 //   CMD:THEME <0-4>           4 = Cover grid (PSRAM only)
 //   CMD:KOSYNC <url>\t<user>\t<password>   KOReader progress sync server
+//   CMD:KOSYNC_AUTO <0|1>      upload reading position on sleep (default 1)
 //   CMD:TS_KEY <tskey-...>    Tailscale auth key for the first tailnet login
 //   CMD:HOME
+//   CMD:SLEEP                 sleep like the power button (runs the KOReader auto-upload)
 //   CMD:STATUS
 static void handleHomesyncCommand(const String& cmd) {
   const int space = cmd.indexOf(' ');
@@ -689,9 +700,17 @@ static void handleHomesyncCommand(const String& cmd) {
     KOREADER_STORE.setMatchMethod(DocumentMatchMethod::BINARY);
     const bool ok = KOREADER_STORE.saveToFile();
     logSerial.printf("HS:KOSYNC %s %s\n", f[0].c_str(), ok ? "OK" : "FAIL");
-  } else if (name == "TS_KEY"&& f.size() == 1 && f[0].rfind("tskey-", 0) == 0) {
+  } else if (name == "KOSYNC_AUTO" && f.size() == 1) {
+    const int m = atoi(f[0].c_str());
+    const bool ok = (m == 0 || m == 1) && homesync::koauto::setMode(static_cast<uint8_t>(m));
+    logSerial.printf("HS:KOSYNC_AUTO %d %s\n", m, ok ? "OK" : "FAIL");
+  } else if (name == "TS_KEY" && f.size() == 1 && f[0].rfind("tskey-", 0) == 0) {
     const bool ok = homesync::tailnet::saveAuthKey(f[0]);
     logSerial.printf("HS:TS_KEY %s\n", ok ? "OK" : "FAIL");
+  } else if (name == "SLEEP") {
+    logSerial.printf("HS:SLEEP OK\n");
+    logSerial.flush();
+    enterDeepSleep();
   } else if (name == "HOME") {
     activityManager.goHome();
     logSerial.printf("HS:HOME OK\n");

@@ -46,6 +46,9 @@
 #include "util/BookmarkUtil.h"
 #include "util/ButtonNavigator.h"
 #include "util/ScreenshotUtil.h"
+#if HOMESYNC
+#include "homesync/KoAuto.h"
+#endif
 
 namespace {
 // The X4 Pro and X4 Classic carry the X4's panel but sit outside isXteinkDevice()
@@ -1005,6 +1008,22 @@ bool EpubReaderActivity::launchKOReaderSync() {
   activityManager.replaceActivity(std::make_unique<KOReaderSyncActivity>(
       renderer, mappedInput, savedEpubPath, localPos, std::move(localKoPos), std::move(localChapterName)));
   return true;
+}
+
+void EpubReaderActivity::beforeSleep() {
+#if HOMESYNC
+  // Capture the position for the KOReader auto-upload while the book is still
+  // loaded; the upload itself runs after the sleep screen (see main.cpp).
+  if (!epub || !homesync::koauto::wanted()) return;
+  RenderLock renderLock;
+  const CrossPointPosition localPos = getCurrentPosition();
+  SavedProgressPosition koPos;
+  {
+    GfxRenderer::FrameBufferLoan loan(renderer);
+    koPos = ProgressMapper::toSavedProgress(epub, localPos);
+  }
+  homesync::koauto::capture(epub->getPath(), koPos.xpath, koPos.percentage);
+#endif
 }
 
 void EpubReaderActivity::applyInitialOrientation() {

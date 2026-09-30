@@ -9,7 +9,7 @@
 
 #include "MappedInputManager.h"
 #include "SilentRestart.h"
-#include "WifiCredentialStore.h"
+#include "homesync/QuietWifi.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/UITheme.h"
 
@@ -91,7 +91,7 @@ void HomeSyncActivity::loop() {
     case State::WIFI:
       return;
     case State::AUTO_WIFI:
-      if (quietConnect()) {
+      if (homesync::quietConnect()) {
         state = State::READY;
       } else {
         LOG_INF("SYNC", "Auto-sync: no known Wi-Fi in range");
@@ -113,27 +113,6 @@ void HomeSyncActivity::loop() {
       return;
     }
   }
-}
-
-bool HomeSyncActivity::quietConnect() {
-  WIFI_STORE.loadFromFile();
-  if (WIFI_STORE.getCredentialCount() == 0) return false;
-  WiFi.mode(WIFI_STA);
-  const int found = WiFi.scanNetworks();
-  for (int i = 0; i < found; ++i) {
-    const auto cred = WIFI_STORE.findCredential(WiFi.SSID(i).c_str());
-    if (!cred) continue;
-    LOG_INF("SYNC", "Auto-sync: joining %s", cred->ssid.c_str());
-    WiFi.begin(cred->ssid.c_str(), cred->password.c_str());
-    for (int t = 0; t < 150 && WiFi.status() != WL_CONNECTED; ++t) delay(100);  // up to 15 s
-    if (WiFi.status() == WL_CONNECTED) {
-      WiFi.scanDelete();
-      return true;
-    }
-    WiFi.disconnect(false);
-  }
-  WiFi.scanDelete();
-  return false;
 }
 
 void HomeSyncActivity::startSync() {

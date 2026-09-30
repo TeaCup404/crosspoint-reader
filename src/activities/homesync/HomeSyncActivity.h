@@ -36,7 +36,6 @@ class HomeSyncActivity final : public Activity, private UiAppHost {
 
   static void rootScreen(UiScreen& screen, void* user);
   static void onCancelEvent(const freeink::ui::ActionEvent& event, void* user);
-  bool quietConnect();
   void startSync();
   void finish(const homesync::Result& result);
 };
