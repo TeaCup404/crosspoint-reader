@@ -116,14 +116,6 @@ bool anySubscriber(const Event e) {
   return false;
 }
 
-bool wantsConnect(const Event e) {
-  for (const auto& sub : subscribers) {
-    if (sub.name[0] == '\0' || !(sub.connectMask & eventBit(e))) continue;
-    if (Storage.exists(outboxPath(sub).c_str())) return true;
-  }
-  return false;
-}
-
 bool wantsConnectAny() {
   for (const auto& sub : subscribers) {
     if (sub.name[0] == '\0' || sub.connectMask == 0) continue;

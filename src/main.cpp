@@ -310,14 +310,9 @@ static void deliverSleepPluginEvents() {
     pluginevents::drain(&renderer);
     return;
   }
-  // wantsConnectAny(), not wantsConnect(SleepEnter). This change adds a fifth
-  // event, reader.session, which is queued during the reading turn and drained
-  // on this same sleep. Gating the join on SleepEnter alone would leave a
-  // reader.session subscriber undelivered whenever nothing subscribed to
-  // sleep.enter itself, which is the common case for a progress-sync plugin.
-  //
-  // Structure follows upstream's early-return form from "Simplify sleep.enter
-  // WiFi connection logic"; only the predicate is widened.
+  // Any connect-flagged queued event justifies the join, not only
+  // sleep.enter: reader.session is queued while reading and delivered on this
+  // same sleep, and a progress-sync plugin usually subscribes to it alone.
   if (!pluginevents::wantsConnectAny()) return;
   if (powerManager.getBatteryPercentage() < 20) return;
   const auto cred = WIFI_STORE.findCredential(WIFI_STORE.getLastConnectedSsid());

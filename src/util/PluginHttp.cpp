@@ -33,7 +33,8 @@ freeink::SecureHttpClient* openClient(freeink::SecureHttpClient* session, freein
 
 namespace pluginhttp {
 
-bool segIsIndex(const std::string& seg) { return !seg.empty() && isdigit(static_cast<unsigned char>(seg[0])); }
+// True when a dotted-path segment addresses an array index.
+static bool segIsIndex(const std::string& seg) { return !seg.empty() && isdigit(static_cast<unsigned char>(seg[0])); }
 
 void splitPath(const std::string& dotted, std::vector<std::string>& out) {
   out.clear();

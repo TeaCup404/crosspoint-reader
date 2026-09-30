@@ -66,15 +66,10 @@ void refreshSubscriptions();
 // True when at least one plugin subscribes to `e` (a few string compares).
 bool anySubscriber(Event e);
 
-// True when some subscriber to `e` marks its handler "connect": true AND has
-// queued events waiting: the caller may bring WiFi up (bounded) so delivery
-// happens now instead of the next online session. sleep.enter subscriptions
-// imply connect (see above). Used by the sleep path to fetch e.g. a fresh
-// sleep image before the chip powers down.
-bool wantsConnect(Event e);
-
-// True when any queued event belongs to a handler that opted into bounded
-// sleep-time WiFi bring-up.
+// True when any queued event belongs to a handler marked "connect": true
+// (sleep.enter subscriptions imply it; see above): the sleep path may then
+// bring WiFi up, bounded, so delivery happens before the chip powers down
+// (e.g. a fresh sleep image) instead of in the next online session.
 bool wantsConnectAny();
 
 // Appends the event to each subscribing plugin's outbox. No-op without

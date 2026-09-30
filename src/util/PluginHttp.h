@@ -27,9 +27,6 @@ using Headers = std::vector<std::pair<std::string, std::string>>;
 // Splits a dotted path ("authors.0.name") into segments.
 void splitPath(const std::string& dotted, std::vector<std::string>& out);
 
-// True when a dotted-path segment addresses an array index.
-bool segIsIndex(const std::string& seg);
-
 // Resolves a dotted path against a parsed document.
 JsonVariantConst resolvePath(JsonVariantConst node, const std::string& dotted);
 
