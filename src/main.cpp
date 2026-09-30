@@ -34,6 +34,8 @@
 #include "activities/ActivityManager.h"
 #include "activities/settings/SdFirmwareUpdateActivity.h"
 #if HOMESYNC
+#include <driver/usb_serial_jtag.h>
+
 #include "WifiCredentialStore.h"
 #include "activities/homesync/HomeSyncActivity.h"
 #include "homesync/HomeSync.h"
@@ -847,6 +849,13 @@ void loop() {
   }
 
   const unsigned long sleepTimeoutMs = SETTINGS.getSleepTimeoutMs();
+#if HOMESYNC
+  // Stay awake while a computer is on the USB port (serial setup, flashing,
+  // logs); a plain charger has no USB host, so it still sleeps normally.
+  if (sleepTimeoutMs > 0 && millis() - lastActivityTime >= sleepTimeoutMs && usb_serial_jtag_is_connected()) {
+    lastActivityTime = millis();
+  }
+#endif
   if (sleepTimeoutMs > 0 && millis() - lastActivityTime >= sleepTimeoutMs) {
     LOG_DBG("SLP", "Auto-sleep triggered after %lu ms of inactivity", sleepTimeoutMs);
     enterDeepSleep(true);
