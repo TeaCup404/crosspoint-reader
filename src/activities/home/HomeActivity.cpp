@@ -21,6 +21,9 @@
 #include "CrossPointState.h"
 #include "MappedInputManager.h"
 #include "OpdsServerStore.h"
+#if HOMESYNC
+#include "activities/homesync/ServerDashActivity.h"
+#endif
 #include "RecentBooksStore.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -33,7 +36,16 @@ int HomeActivity::getMenuItemCount() const {
   if (hasOpdsServers) {
     count++;
   }
+  if (hasServerItem()) count++;
   return count;
+}
+
+bool HomeActivity::hasServerItem() const {
+#if HOMESYNC
+  return !coverGridUi;
+#else
+  return false;
+#endif
 }
 
 void HomeActivity::loadRecentBooks(int maxBooks) {
@@ -245,7 +257,7 @@ void HomeActivity::onEnter() {
   }
 
   const auto base = static_cast<int>(recentBooks.size());
-  selectorIndex = initialMenuItem == HomeMenuItem::NONE ? 0 : base + menuItemToIndex(initialMenuItem, hasOpdsServers);
+  selectorIndex = initialMenuItem == HomeMenuItem::NONE ? 0 : base + menuItemToIndex(initialMenuItem, hasOpdsServers, hasServerItem());
 
   // Trigger first update
   requestUpdate();
@@ -306,7 +318,7 @@ void HomeActivity::loop() {
       return;
     }
     const int menuIndex = selectorIndex - static_cast<int>(recentBooks.size());
-    switch (indexToMenuItem(menuIndex, hasOpdsServers)) {
+    switch (indexToMenuItem(menuIndex, hasOpdsServers, hasServerItem())) {
       case HomeMenuItem::FILE_BROWSER:
         onFileBrowserOpen();
         break;
@@ -316,6 +328,11 @@ void HomeActivity::loop() {
       case HomeMenuItem::OPDS_BROWSER:
         onOpdsBrowserOpen();
         break;
+#if HOMESYNC
+      case HomeMenuItem::SERVER_DASH:
+        activityManager.replaceActivity(std::make_unique<ServerDashActivity>(renderer, mappedInput));
+        break;
+#endif
       case HomeMenuItem::FILE_TRANSFER:
         onFileTransferOpen();
         break;
@@ -515,6 +532,11 @@ void HomeActivity::render(RenderLock&&) {
     menuItems.insert(menuItems.begin() + 2, tr(STR_OPDS_BROWSER));
     menuIcons.insert(menuIcons.begin() + 2, Blocks);
   }
+#if HOMESYNC
+  // Server status, right after the OPDS browser (matches indexToMenuItem).
+  menuItems.insert(menuItems.begin() + (hasOpdsServers ? 3 : 2), "Server");
+  menuIcons.insert(menuIcons.begin() + (hasOpdsServers ? 3 : 2), Hotspot);
+#endif
 
   if (metrics.homeContinueReadingInMenu && !recentBooks.empty()) {
     // Insert Continue Reading at the top if enabled in theme
