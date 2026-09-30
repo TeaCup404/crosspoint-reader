@@ -21,7 +21,7 @@ asset="crosspoint-${version}-x4pro.bin"
 
 pio run -e x4pro-homesync
 bin=.pio/build/x4pro-homesync/firmware.bin
-strings "$bin" | grep -q "${version}-x4pro-hs" || { echo "Built image is not version $version" >&2; exit 1; }
+grep -qa "${version}-x4pro-hs" "$bin" || { echo "Built image is not version $version" >&2; exit 1; }
 size=$(stat -f%z "$bin")
 
 scp -q "$bin" "$HOST:$OTA_DIR/$asset.tmp"
