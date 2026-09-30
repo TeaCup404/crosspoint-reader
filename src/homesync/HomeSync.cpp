@@ -170,7 +170,11 @@ Result run(const OpdsServer& server, const std::function<void(const char*)>& sta
     const std::string wanted = lower(state.shelf);
     if (shelves.ok) {
       for (const auto& e : shelves.entries) {
-        if (e.type == OpdsEntryType::NAVIGATION && lower(e.title) == wanted) {
+        // Calibre-Web appends a (localized) marker to some shelf titles, e.g.
+        // "To Reader (Public)", so accept the name followed by " (...)".
+        const std::string title = lower(e.title);
+        const bool match = title == wanted || title.rfind(wanted + " (", 0) == 0;
+        if (e.type == OpdsEntryType::NAVIGATION && match) {
           feedUrl = UrlUtils::buildUrl(UrlUtils::buildUrl(server.url, SHELF_INDEX_PATH), e.href);
           result.source = "Shelf: " + e.title;
           break;
