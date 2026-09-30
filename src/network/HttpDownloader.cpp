@@ -9,6 +9,10 @@
 #include <functional>
 #include <string>
 
+#if HOMESYNC
+#include "homesync/Tailnet.h"
+#endif
+
 #if defined(FREEINK_NET_WOLFSSL)
 #include <SecureHttpClient.h>
 
@@ -247,7 +251,7 @@ HttpDownloader::DownloadError runGet(const std::string& url, const std::string& 
 // speaks TLS 1.3 and reads large bodies from servers where the esp_http_client/
 // mbedTLS path fails to connect or stalls mid-stream. Plain-http URLs still use a
 // WiFiClient inside runGetWolf, so this is safe for non-TLS targets too.
-HttpDownloader::DownloadError runGetSecure(const std::string& url, const std::string& username,
+HttpDownloader::DownloadError runGetDirect(const std::string& url, const std::string& username,
                                            const std::string& password, Sink& sink,
                                            bool downgradeRedirectsToHttp = false) {
 #if defined(FREEINK_NET_WOLFSSL)
@@ -258,6 +262,50 @@ HttpDownloader::DownloadError runGetSecure(const std::string& url, const std::st
   (void)downgradeRedirectsToHttp;
   return runGet(url, username, password, sink);
 #endif
+}
+#if HOMESYNC
+// x4pro-homesync: home-server URLs go through Tailscale when the reader is away
+// from the home LAN, or when the LAN request fails before any data arrived.
+HttpDownloader::DownloadError runGetTailnet(const std::string& url, const std::string& username,
+                                            const std::string& password, Sink& sink) {
+  if (!homesync::tailnet::up(homesync::tailnet::HOMEBOT_TAILNET_IP, [](const char*) {}, sink.cancelFlag)) {
+    return HttpDownloader::HTTP_ERROR;
+  }
+  const bool ok = homesync::tailnet::get(
+      url, username, password,
+      [&sink](const uint8_t* data, size_t len) {
+        if (!sink.write(data, len)) return false;
+        sink.downloaded += len;
+        if (sink.progress && sink.total > 0) sink.progress(sink.downloaded, sink.total);
+        return true;
+      },
+      [&sink](size_t total) { sink.total = total; }, sink.cancelFlag);
+  if (ok) return HttpDownloader::OK;
+  return sink.cancelFlag && *sink.cancelFlag ? HttpDownloader::ABORTED : HttpDownloader::HTTP_ERROR;
+}
+#endif
+
+HttpDownloader::DownloadError runGetSecure(const std::string& url, const std::string& username,
+                                           const std::string& password, Sink& sink,
+                                           bool downgradeRedirectsToHttp = false) {
+#if HOMESYNC
+  std::string tailnetUrl;
+  bool direct = false;
+  if (homesync::tailnet::tailnetUrlFor(url, tailnetUrl, direct)) {
+    if (!direct && homesync::tailnet::atHome()) {
+      const auto result = runGetDirect(url, username, password, sink, downgradeRedirectsToHttp);
+      if (result != HttpDownloader::HTTP_ERROR || sink.downloaded > 0 || !homesync::tailnet::configured()) {
+        return result;
+      }
+      LOG_INF("HTTP", "Home server unreachable on the LAN, trying Tailscale");
+    } else if (!homesync::tailnet::configured()) {
+      return runGetDirect(url, username, password, sink, downgradeRedirectsToHttp);
+    }
+    LOG_DBG("HTTP", "Via Tailscale: %s", tailnetUrl.c_str());
+    return runGetTailnet(tailnetUrl, username, password, sink);
+  }
+#endif
+  return runGetDirect(url, username, password, sink, downgradeRedirectsToHttp);
 }
 }  // namespace
 

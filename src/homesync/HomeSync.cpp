@@ -244,7 +244,11 @@ Result run(const OpdsServer& server, const std::function<void(const char*)>& sta
       result.source = "Newest " + std::to_string(cap) + " books";
     }
   }
-  if (viaTailnet) result.source += " via Tailscale";
+  bool tunnelled = viaTailnet;
+#if HOMESYNC
+  tunnelled = tunnelled || tailnet::isUp();  // HttpDownloader may have routed the LAN URLs
+#endif
+  if (tunnelled) result.source += " via Tailscale";
   LOG_INF("SYNC", "Syncing %s (%s)", feedUrl.c_str(), result.source.c_str());
 
   // 3. Walk the feed (following pagination) and collect books not on the device.

@@ -3,6 +3,7 @@
 #if HOMESYNC
 
 #include <Arduino.h>
+#include <WiFi.h>
 #include <ArduinoJson.h>
 #include <HalStorage.h>
 #include <ObfuscationUtils.h>
@@ -262,8 +263,8 @@ using Sink = std::function<bool(const uint8_t*, size_t)>;
 using Total = std::function<void(size_t)>;
 
 // GET url, following redirects; streams a 200 body into sink.
-bool get(std::string url, const std::string& user, const std::string& password, const Sink& sink,
-         const Total& onTotal, bool* cancel) {
+bool getImpl(std::string url, const std::string& user, const std::string& password, const Sink& sink,
+             const Total& onTotal, bool* cancel) {
   for (int hop = 0; hop <= MAX_REDIRECTS; ++hop) {
     Url u;
     if (!parseUrl(url, u)) {
@@ -386,6 +387,50 @@ bool up(const char* ip, const Status& status, const bool* cancel) {
   return ok;
 }
 
+namespace {
+struct Mapping {
+  const char* lan;
+  const char* tailnet;
+};
+constexpr Mapping MAPPINGS[] = {
+    {"http://192.168.1.124:8083", "https://books.gabyhome.xyz"},  // Calibre-Web via Caddy
+    {"http://192.168.1.124:8790", "http://100.86.140.113:8790"},  // reader-hub
+};
+}  // namespace
+
+bool tailnetUrlFor(const std::string& url, std::string& out, bool& direct) {
+  direct = false;
+  for (const auto& m : MAPPINGS) {
+    const size_t n = strlen(m.lan);
+    if (url.compare(0, n, m.lan) == 0 && (url.size() == n || url[n] == '/')) {
+      out = std::string(m.tailnet) + url.substr(n);
+      return true;
+    }
+  }
+  if (url.rfind("http://100.86.140.113", 0) == 0 || url.rfind("https://books.gabyhome.xyz", 0) == 0) {
+    out = url;
+    direct = true;
+    return true;
+  }
+  return false;
+}
+
+bool forceAway = false;
+
+bool atHome() {
+  if (forceAway) return false;
+  const IPAddress ip = WiFi.localIP();
+  return ip[0] == 192 && ip[1] == 168 && ip[2] == 1;
+}
+
+bool get(const std::string& url, const std::string& user, const std::string& password,
+         const std::function<bool(const uint8_t*, size_t)>& onData, const std::function<void(size_t)>& onTotal,
+         bool* cancel) {
+  if (!isUp()) return false;
+  LOG_DBG("TSN", "GET %s", url.c_str());
+  return getImpl(url, user, password, onData, onTotal, cancel);
+}
+
 void down() {
   if (!ml) return;
   microlink_stop(ml);
@@ -399,7 +444,7 @@ bool fetch(const std::string& url, const HttpDownloader::DataCallback& onData, c
            const std::string& password) {
   if (!isUp()) return false;
   LOG_DBG("TSN", "Fetching: %s", url.c_str());
-  return get(url, user, password, onData, nullptr, nullptr);
+  return getImpl(url, user, password, onData, nullptr, nullptr);
 }
 
 HttpDownloader::DownloadError download(const std::string& url, const std::string& destPath,
@@ -413,7 +458,7 @@ HttpDownloader::DownloadError download(const std::string& url, const std::string
   size_t done = 0;
   size_t total = 0;
   bool fileError = false;
-  const bool ok = get(
+  const bool ok = getImpl(
       url, user, password,
       [&](const uint8_t* data, size_t len) {
         if (file.write(data, len) != len) {

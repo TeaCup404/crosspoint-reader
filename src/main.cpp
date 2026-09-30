@@ -40,6 +40,8 @@
 #include "activities/homesync/HomeSyncActivity.h"
 #include "homesync/HomeSync.h"
 #include "homesync/KoAuto.h"
+#include "homesync/QuietWifi.h"
+#include "network/OtaUpdater.h"
 #include "homesync/Tailnet.h"
 #endif
 #include "components/UITheme.h"
@@ -621,6 +623,8 @@ void setup() {
 //   CMD:KOSYNC_AUTO <0|1>      upload reading position on sleep (default 1)
 //   CMD:TS_KEY <tskey-...>    Tailscale auth key for the first tailnet login
 //   CMD:HOME
+//   CMD:ROUTE TS|AUTO          TS: act as if away from home (test), until reboot
+//   CMD:OTA_CHECK             run the update check and print the result
 //   CMD:SLEEP                 sleep like the power button (runs the KOReader auto-upload)
 //   CMD:STATUS
 static void handleHomesyncCommand(const String& cmd) {
@@ -707,6 +711,18 @@ static void handleHomesyncCommand(const String& cmd) {
   } else if (name == "TS_KEY" && f.size() == 1 && f[0].rfind("tskey-", 0) == 0) {
     const bool ok = homesync::tailnet::saveAuthKey(f[0]);
     logSerial.printf("HS:TS_KEY %s\n", ok ? "OK" : "FAIL");
+  } else if (name == "ROUTE" && f.size() == 1) {
+    homesync::tailnet::forceAway = f[0] == "TS";
+    logSerial.printf("HS:ROUTE %s OK\n", homesync::tailnet::forceAway ? "TS" : "AUTO");
+  } else if (name == "OTA_CHECK") {
+    if (!homesync::quietConnect()) {
+      logSerial.printf("HS:OTA_CHECK FAIL no Wi-Fi\n");
+      return;
+    }
+    OtaUpdater ota;
+    const auto rc = ota.checkForUpdate();
+    logSerial.printf("HS:OTA_CHECK rc=%d latest=%s newer=%d\n", static_cast<int>(rc), ota.getLatestVersion().c_str(),
+                     rc == OtaUpdater::OK && ota.isUpdateNewer());
   } else if (name == "SLEEP") {
     logSerial.printf("HS:SLEEP OK\n");
     logSerial.flush();

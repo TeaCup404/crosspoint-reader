@@ -33,6 +33,22 @@ bool isUp();
 // Same contracts as HttpDownloader, but over the tunnel. Only http:// and
 // https:// URLs whose host is `hostName` (or a literal IP) are supported; the
 // host resolves to `serverIp` given to up().
+// ---- routing for HttpDownloader (all HTTP in the firmware goes through it) ----
+// Maps a home-LAN URL to its tailnet equivalent (CWA -> https://books.gabyhome.xyz,
+// reader-hub -> http://100.86.140.113:8790). URLs already on the tailnet map to
+// themselves with `direct` set. False for anything else (internet, other hosts).
+bool tailnetUrlFor(const std::string& url, std::string& out, bool& direct);
+// True when Wi-Fi is on the home LAN (192.168.1.0/24).
+bool atHome();
+// Test hook (CMD:ROUTE TS): behave as if away from home until reboot.
+extern bool forceAway;
+// Generic GET over the tunnel: streams the 200 body to onData, reports the
+// Content-Length (0 if unknown) through onTotal. Tailnet must be up.
+bool get(const std::string& url, const std::string& user, const std::string& password,
+         const std::function<bool(const uint8_t*, size_t)>& onData, const std::function<void(size_t)>& onTotal,
+         bool* cancel);
+constexpr const char* HOMEBOT_TAILNET_IP = "100.86.140.113";
+
 bool fetch(const std::string& url, const HttpDownloader::DataCallback& onData, const std::string& user,
            const std::string& password);
 HttpDownloader::DownloadError download(const std::string& url, const std::string& destPath,

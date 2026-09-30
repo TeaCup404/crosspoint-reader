@@ -112,6 +112,7 @@ void ServerDashActivity::load() {
     viaTailnet = ok;
   }
 
+  viaTailnet = viaTailnet || homesync::tailnet::isUp();
   if (!ok || !parse(body)) {
     state = State::FAILED;
     error = ok ? "Unexpected reply from the server" : "Server not reachable";
