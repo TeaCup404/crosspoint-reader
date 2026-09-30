@@ -88,7 +88,13 @@ void RecapActivity::onExit() {
   }
 }
 
-void RecapActivity::backToBook() { activityManager.goToReader(epubPath); }
+void RecapActivity::backToBook() {
+  if (epubPath.empty()) {
+    onGoHome();  // opened by the CMD:RECAP test hook, not from a book
+    return;
+  }
+  activityManager.goToReader(epubPath);
+}
 
 void RecapActivity::fetch() {
   wifiUsed = true;

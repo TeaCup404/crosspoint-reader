@@ -38,6 +38,7 @@
 
 #include "WifiCredentialStore.h"
 #include "activities/homesync/HomeSyncActivity.h"
+#include "activities/homesync/RecapActivity.h"
 #include "homesync/HomeSync.h"
 #include "homesync/KoAuto.h"
 #include "homesync/QuietWifi.h"
@@ -626,6 +627,7 @@ void setup() {
 //   CMD:ROUTE TS|AUTO          TS: act as if away from home (test), until reboot
 //   CMD:OTA_CHECK             run the update check and print the result
 //   CMD:OTA_INSTALL           check and, if newer, install + reboot
+//   CMD:RECAP <title>\t<author>\t<0..1>  open "Story so far" (test)
 //   CMD:SLEEP                 sleep like the power button (runs the KOReader auto-upload)
 //   CMD:STATUS
 static void handleHomesyncCommand(const String& cmd) {
@@ -731,6 +733,11 @@ static void handleHomesyncCommand(const String& cmd) {
       logSerial.flush();
       if (irc == OtaUpdater::OK) esp_restart();
     }
+  } else if (name == "RECAP" && f.size() == 3) {
+    // Test hook: open "Story so far" for a book without the reader menu.
+    activityManager.replaceActivity(std::make_unique<RecapActivity>(renderer, mappedInputManager, "", f[0], f[1],
+                                                                    static_cast<float>(atof(f[2].c_str()))));
+    logSerial.printf("HS:RECAP started\n");
   } else if (name == "SLEEP") {
     logSerial.printf("HS:SLEEP OK\n");
     logSerial.flush();
