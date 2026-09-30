@@ -606,6 +606,7 @@ void setup() {
 //   CMD:SYNC                  start "Sync library"
 //   CMD:LIGHT <0-100> <warm 0-100>   brightness 0 = off
 //   CMD:THEME <0-4>           4 = Cover grid (PSRAM only)
+//   CMD:KOSYNC <url>\t<user>\t<password>   KOReader progress sync server
 //   CMD:TS_KEY <tskey-...>    Tailscale auth key for the first tailnet login
 //   CMD:HOME
 //   CMD:STATUS
@@ -677,7 +678,15 @@ static void handleHomesyncCommand(const String& cmd) {
     UITheme::getInstance().reload();
     activityManager.goHome();
     logSerial.printf("HS:THEME %d OK\n", theme);
-  } else if (name == "TS_KEY" && f.size() == 1 && f[0].rfind("tskey-", 0) == 0) {
+  } else if (name == "KOSYNC" && f.size() == 3 && !f[0].empty()) {
+    // Calibre-Web-Automated's kosync identifies books by KOReader's partial
+    // MD5, so match by file content.
+    KOREADER_STORE.setServerUrl(f[0]);
+    KOREADER_STORE.setCredentials(f[1], f[2]);
+    KOREADER_STORE.setMatchMethod(DocumentMatchMethod::BINARY);
+    const bool ok = KOREADER_STORE.saveToFile();
+    logSerial.printf("HS:KOSYNC %s %s\n", f[0].c_str(), ok ? "OK" : "FAIL");
+  } else if (name == "TS_KEY"&& f.size() == 1 && f[0].rfind("tskey-", 0) == 0) {
     const bool ok = homesync::tailnet::saveAuthKey(f[0]);
     logSerial.printf("HS:TS_KEY %s\n", ok ? "OK" : "FAIL");
   } else if (name == "HOME") {
