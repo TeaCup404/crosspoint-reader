@@ -1,0 +1,13 @@
+{
+  "name": "wireguard_lwip",
+  "version": "0.0.0-x4homesync",
+  "description": "WireGuard for lwIP (vendored for MicroLink; refc crypto only)",
+  "frameworks": "arduino",
+  "platforms": "espressif32",
+  "build": {
+    "srcDir": "src",
+    "srcFilter": ["+<wireguard.c>", "+<wireguardif.c>", "+<crypto.c>", "+<wireguard-platform-esp32.c>", "+<crypto/refc/*.c>"],
+    "flags": ["-DWIREGUARD_CRYPTO_REFC=1", "-Isrc/crypto/refc", "-Wno-stringop-overread"],
+    "includeDir": "src"
+  }
+}

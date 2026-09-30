@@ -1,0 +1,14 @@
+{
+  "name": "microlink",
+  "version": "0.0.0-x4homesync",
+  "description": "MicroLink Tailscale client, vendored from the keychain project (upstream commit in UPSTREAM_COMMIT). Cellular, AT-socket, net-switch and config-httpd sources are left out.",
+  "frameworks": "arduino",
+  "platforms": "espressif32",
+  "dependencies": [{ "name": "wireguard_lwip" }],
+  "build": {
+    "srcDir": "src",
+    "srcFilter": ["+<*.c>", "-<ml_cellular.c>", "-<ml_at_socket.c>", "-<ml_net_switch.c>", "-<ml_config_httpd.c>", "-<x25519.c>"],
+    "flags": ["-Isrc", "-I../wireguard_lwip/src", "-I../wireguard_lwip/src/crypto/refc"],
+    "includeDir": "include"
+  }
+}
