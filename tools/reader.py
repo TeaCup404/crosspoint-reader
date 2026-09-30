@@ -5,6 +5,9 @@
   reader.py screenshot out.png          (macOS: converted with sips)
   reader.py light 60 50                 (brightness 0 = off, warm 0-100)
   reader.py sync
+  reader.py theme 4                     (0 Classic, 1 Lyra, 2 Lyra 3 covers, 3 RoundedRaff, 4 Cover grid)
+  reader.py home
+  reader.py tskey                       (prompts for the Tailscale auth key; not echoed)
   reader.py setup                       (prompts for Wi-Fi + library; passwords are not echoed)
   reader.py wifi <ssid>                 (prompts for the password)
   reader.py opds <url> <user>           (prompts for the password)
@@ -96,6 +99,15 @@ def main():
         print(command(port, f"CMD:LIGHT {args[0]} {args[1] if len(args) > 1 else -1}"))
     elif op == "sync":
         print(command(port, "CMD:SYNC"))
+    elif op == "theme":
+        print(command(port, f"CMD:THEME {args[0]}"))
+    elif op == "tskey":
+        key = ask_secret("Tailscale auth key (tskey-...): ").strip()
+        if not key.startswith("tskey-"):
+            sys.exit("That does not look like a Tailscale auth key")
+        print(command(port, f"CMD:TS_KEY {key}"))
+    elif op == "home":
+        print(command(port, "CMD:HOME"))
     elif op in ("wifi", "opds", "setup"):
         if op in ("wifi", "setup"):
             ssid = args[0] if op == "wifi" else input("Wi-Fi name: ")

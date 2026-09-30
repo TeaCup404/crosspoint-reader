@@ -37,6 +37,7 @@
 #include "WifiCredentialStore.h"
 #include "activities/homesync/HomeSyncActivity.h"
 #include "homesync/HomeSync.h"
+#include "homesync/Tailnet.h"
 #endif
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -604,6 +605,9 @@ void setup() {
 //   CMD:OPDS_ADD <name>\t<url>\t<user>\t<password>   (same url = update)
 //   CMD:SYNC                  start "Sync library"
 //   CMD:LIGHT <0-100> <warm 0-100>   brightness 0 = off
+//   CMD:THEME <0-4>           4 = Cover grid (PSRAM only)
+//   CMD:TS_KEY <tskey-...>    Tailscale auth key for the first tailnet login
+//   CMD:HOME
 //   CMD:STATUS
 static void handleHomesyncCommand(const String& cmd) {
   const int space = cmd.indexOf(' ');
@@ -660,6 +664,25 @@ static void handleHomesyncCommand(const String& cmd) {
     SETTINGS.frontlightOn = brightness > 0;
     SETTINGS.saveToFile();
     logSerial.printf("HS:LIGHT %d %d OK\n", brightness, warm);
+  } else if (name == "THEME" && f.size() == 1) {
+    // 0 Classic, 1 Lyra, 2 Lyra 3 covers, 3 RoundedRaff, 4 Cover grid (PSRAM only)
+    const int theme = atoi(f[0].c_str());
+    if (theme < CrossPointSettings::CLASSIC || theme > CrossPointSettings::COVER_GRID ||
+        (theme == CrossPointSettings::COVER_GRID && !UITheme::supportsCoverGrid())) {
+      logSerial.printf("HS:THEME FAIL\n");
+      return;
+    }
+    SETTINGS.uiTheme = static_cast<uint8_t>(theme);
+    SETTINGS.saveToFile();
+    UITheme::getInstance().reload();
+    activityManager.goHome();
+    logSerial.printf("HS:THEME %d OK\n", theme);
+  } else if (name == "TS_KEY" && f.size() == 1 && f[0].rfind("tskey-", 0) == 0) {
+    const bool ok = homesync::tailnet::saveAuthKey(f[0]);
+    logSerial.printf("HS:TS_KEY %s\n", ok ? "OK" : "FAIL");
+  } else if (name == "HOME") {
+    activityManager.goHome();
+    logSerial.printf("HS:HOME OK\n");
   } else if (name == "STATUS") {
     WIFI_STORE.loadFromFile();
     logSerial.printf("HS:STATUS wifi=%u opds=%u wifiConnected=%d\n",

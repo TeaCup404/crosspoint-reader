@@ -19,7 +19,12 @@
 #include "FirmwareFlasher.h"
 
 namespace {
+#ifdef HOMESYNC_OTA_URL
+// Personal builds update from reader-hub on the home server (GitHub-shaped JSON).
+constexpr char latestReleaseUrl[] = HOMESYNC_OTA_URL;
+#else
 constexpr char latestReleaseUrl[] = "https://api.github.com/repos/crosspoint-reader/crosspoint-reader/releases/latest";
+#endif
 }  // namespace
 
 OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {

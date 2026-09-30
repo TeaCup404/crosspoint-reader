@@ -1,0 +1,14 @@
+[Unit]
+Description=reader-hub (firmware updates for the X4 Pro reader)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+User=gabriel
+WorkingDirectory=/opt/reader-hub
+ExecStart=/usr/bin/python3 /opt/reader-hub/reader_hub.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

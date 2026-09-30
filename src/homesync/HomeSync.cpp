@@ -18,6 +18,10 @@
 #include "CrossPointSettings.h"
 #include "network/HttpDownloader.h"
 #include "util/BookCacheUtils.h"
+#include "util/LibraryCoverThumbs.h"
+#if HOMESYNC
+#include "Tailnet.h"
+#endif
 #include "util/OpdsFilename.h"
 #include "util/UrlUtils.h"
 
@@ -29,6 +33,9 @@ constexpr const char* DEFAULT_SHELF = "To Reader";
 constexpr const char* SHELF_INDEX_PATH = "/opds/shelfindex";  // Calibre-Web
 constexpr const char* NEWEST_PATH = "/opds/new";              // Calibre-Web
 constexpr int DEFAULT_MAX_NEW = 10;
+// Away from home the library is reached over Tailscale, through Caddy.
+constexpr const char* DEFAULT_TAILNET_URL = "https://books.gabyhome.xyz/opds";
+constexpr const char* DEFAULT_TAILNET_IP = "100.86.140.113";
 constexpr int DEFAULT_AUTO_HOURS = 6;
 constexpr int MAX_FEED_PAGES = 10;
 constexpr size_t MAX_REMEMBERED_IDS = 500;
@@ -37,6 +44,8 @@ constexpr time_t MIN_VALID_EPOCH = 1704067200;  // 2024-01-01: older means the R
 struct State {
   std::string shelf = DEFAULT_SHELF;
   std::string feed;
+  std::string tailnetUrl = DEFAULT_TAILNET_URL;
+  std::string tailnetIp = DEFAULT_TAILNET_IP;
   int maxNew = DEFAULT_MAX_NEW;
   int autoHours = DEFAULT_AUTO_HOURS;
   time_t lastSync = 0;
@@ -50,6 +59,8 @@ State loadState() {
   if (!PersistableStoreBase::readDocFromFile(STATE_FILE, doc)) return s;
   s.shelf = doc["shelf"] | DEFAULT_SHELF;
   s.feed = doc["feed"] | "";
+  s.tailnetUrl = doc["tailnetUrl"] | DEFAULT_TAILNET_URL;
+  s.tailnetIp = doc["tailnetIp"] | DEFAULT_TAILNET_IP;
   s.maxNew = doc["maxNew"] | DEFAULT_MAX_NEW;
   s.autoHours = doc["autoHours"] | DEFAULT_AUTO_HOURS;
   s.lastSync = static_cast<time_t>(doc["lastSync"] | 0LL);
@@ -65,6 +76,8 @@ void saveState(const State& s) {
   JsonDocument doc;
   doc["shelf"] = s.shelf.c_str();
   doc["feed"] = s.feed.c_str();
+  doc["tailnetUrl"] = s.tailnetUrl.c_str();
+  doc["tailnetIp"] = s.tailnetIp.c_str();
   doc["maxNew"] = s.maxNew;
   doc["autoHours"] = s.autoHours;
   doc["lastSync"] = static_cast<long long>(s.lastSync);
@@ -109,12 +122,30 @@ struct Feed {
   std::string next;
 };
 
+// Set for the rest of a sync once the home LAN turned out to be unreachable.
+bool viaTailnet = false;
+
 Feed fetch(const OpdsServer& server, const std::string& url) {
   Feed feed;
   OpdsParser parser;
   {
     OpdsParserStream stream{parser};
-    if (!HttpDownloader::fetchUrl(url, stream, server.username, server.password)) return feed;
+    bool ok;
+#if HOMESYNC
+    if (viaTailnet) {
+      ok = tailnet::fetch(
+          url,
+          [&stream](const uint8_t* data, size_t len) {
+            stream.write(data, len);
+            return true;
+          },
+          server.username, server.password);
+    } else
+#endif
+    {
+      ok = HttpDownloader::fetchUrl(url, stream, server.username, server.password);
+    }
+    if (!ok) return feed;
   }
   if (!parser) return feed;
   feed.next = parser.getNextPageUrl();
@@ -158,15 +189,36 @@ Result run(const OpdsServer& server, const std::function<void(const char*)>& sta
   status("Setting clock...");
   syncClock();
 
-  // 1. Resolve which feed to sync.
+  // 1. Reach the library: home LAN first, Tailscale when that fails.
+  viaTailnet = false;
+  std::string root = server.url;
+  status("Looking for shelf...");
+  Feed shelves = fetch(server, UrlUtils::buildUrl(root, SHELF_INDEX_PATH));
+#if HOMESYNC
+  if (!shelves.ok && tailnet::configured()) {
+    LOG_INF("SYNC", "Home library unreachable, trying Tailscale");
+    if (!tailnet::up(state.tailnetIp.c_str(), status, cancel)) {
+      result.error = "Tailscale did not connect";
+      return result;
+    }
+    viaTailnet = true;
+    root = state.tailnetUrl;
+    status("Looking for shelf (Tailscale)...");
+    shelves = fetch(server, UrlUtils::buildUrl(root, SHELF_INDEX_PATH));
+  }
+#endif
+  if (!shelves.ok) {
+    result.error = "Library not reachable";
+    return result;
+  }
+
+  // 2. Resolve which feed to sync.
   std::string feedUrl;
   int cap = 0;  // 0 = no cap
   if (!state.feed.empty()) {
-    feedUrl = UrlUtils::buildUrl(server.url, state.feed);
+    feedUrl = UrlUtils::buildUrl(root, state.feed);
     result.source = state.feed;
   } else {
-    status("Looking for shelf...");
-    const Feed shelves = fetch(server, UrlUtils::buildUrl(server.url, SHELF_INDEX_PATH));
     const std::string wanted = lower(state.shelf);
     if (shelves.ok) {
       for (const auto& e : shelves.entries) {
@@ -175,21 +227,22 @@ Result run(const OpdsServer& server, const std::function<void(const char*)>& sta
         const std::string title = lower(e.title);
         const bool match = title == wanted || title.rfind(wanted + " (", 0) == 0;
         if (e.type == OpdsEntryType::NAVIGATION && match) {
-          feedUrl = UrlUtils::buildUrl(UrlUtils::buildUrl(server.url, SHELF_INDEX_PATH), e.href);
+          feedUrl = UrlUtils::buildUrl(UrlUtils::buildUrl(root, SHELF_INDEX_PATH), e.href);
           result.source = "Shelf: " + e.title;
           break;
         }
       }
     }
     if (feedUrl.empty()) {
-      feedUrl = UrlUtils::buildUrl(server.url, NEWEST_PATH);
+      feedUrl = UrlUtils::buildUrl(root, NEWEST_PATH);
       cap = state.maxNew > 0 ? state.maxNew : DEFAULT_MAX_NEW;
       result.source = "Newest " + std::to_string(cap) + " books";
     }
   }
+  if (viaTailnet) result.source += " via Tailscale";
   LOG_INF("SYNC", "Syncing %s (%s)", feedUrl.c_str(), result.source.c_str());
 
-  // 2. Walk the feed (following pagination) and collect books not on the device.
+  // 3. Walk the feed (following pagination) and collect books not on the device.
   const char* folder = SETTINGS.opdsDownloadFolder;  // "" => SD root
   bool haveFolder = folder[0] != '\0';
   if (haveFolder && !Storage.exists(folder) && !Storage.mkdir(folder)) haveFolder = false;
@@ -233,7 +286,7 @@ Result run(const OpdsServer& server, const std::function<void(const char*)>& sta
     pageUrl = feed.next.empty() ? "" : UrlUtils::buildUrl(pageUrl, feed.next);
   }
 
-  // 3. Download.
+  // 4. Download.
   for (size_t i = 0; i < todo.size(); ++i) {
     if (cancel && *cancel) break;
     const Todo& t = todo[i];
@@ -248,19 +301,29 @@ Result run(const OpdsServer& server, const std::function<void(const char*)>& sta
     p.total = static_cast<int>(todo.size());
     p.title = t.title;
     progress(p);
-    const auto rc = HttpDownloader::downloadToFile(
-        t.url, t.path,
-        [&](const size_t done, const size_t total) {
-          p.bytes = done;
-          p.totalBytes = total;
-          progress(p);
-        },
-        cancel, server.username, server.password);
+    const HttpDownloader::ProgressCallback onChunk = [&](const size_t done, const size_t total) {
+      p.bytes = done;
+      p.totalBytes = total;
+      progress(p);
+    };
+#if HOMESYNC
+    const auto rc = viaTailnet
+                        ? tailnet::download(t.url, t.path, onChunk, cancel, server.username, server.password)
+                        : HttpDownloader::downloadToFile(t.url, t.path, onChunk, cancel, server.username, server.password);
+#else
+    const auto rc = HttpDownloader::downloadToFile(t.url, t.path, onChunk, cancel, server.username, server.password);
+#endif
     if (rc == HttpDownloader::OK) {
       clearBookCache(t.path);
       state.synced.push_back(t.id);
       ++result.downloaded;
       saveState(state);  // a later failure or power loss keeps what we got
+      // Have the Library's Covers view ready for the new book. Best effort: a
+      // coverless book or a tight heap only means the grid generates the thumb
+      // (or shows its placeholder) later, never a failed sync.
+      if (!(cancel && *cancel) && library_covers::heapAllowsThumb() && !library_covers::generateThumb(t.path)) {
+        LOG_DBG("SYNC", "No cover thumb for %s", t.path.c_str());
+      }
     } else if (rc == HttpDownloader::ABORTED) {
       break;
     } else {
