@@ -165,6 +165,7 @@ class EpubReaderActivity final : public ReaderActivity {
   void openFootnoteSelect(bool reopenMenuOnCancel);
   void openDictionaryWordSelect();
   bool launchKOReaderSync();
+  void launchRecap();
 
  public:
   void beforeSleep() override;

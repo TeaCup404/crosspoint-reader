@@ -139,9 +139,10 @@ class Handler(BaseHTTPRequestHandler):
             q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
             try:
                 pct = float(q.get("pct", ["0"])[0])
-                code, body = recap.handle(q.get("title", [""])[0], q.get("author", [""])[0], pct)
+                _, body = recap.handle(q.get("title", [""])[0], q.get("author", [""])[0], pct)
+                code = 200  # state is in the body; the firmware treats non-200 as a transport error
             except Exception as e:
-                code, body = 500, {"status": "error", "message": str(e)[:200]}
+                code, body = 200, {"status": "error", "message": str(e)[:200]}
             self.send_bytes(code, json.dumps(body, ensure_ascii=False).encode(), "application/json; charset=utf-8")
         elif path == "/ota/latest.json":
             self.latest()

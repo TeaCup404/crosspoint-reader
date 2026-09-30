@@ -47,6 +47,7 @@
 #include "util/ButtonNavigator.h"
 #include "util/ScreenshotUtil.h"
 #if HOMESYNC
+#include "activities/homesync/RecapActivity.h"
 #include "homesync/KoAuto.h"
 #endif
 
@@ -936,6 +937,12 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       launchKOReaderSync();
       break;
     }
+#if HOMESYNC
+    case EpubReaderMenuActivity::MenuAction::STORY_SO_FAR: {
+      launchRecap();
+      break;
+    }
+#endif
     case EpubReaderMenuActivity::MenuAction::BOOKMARKS: {
       startActivityForResult(
           std::make_unique<EpubReaderBookmarksActivity>(renderer, mappedInput, epub, epub->getPath()),
@@ -1008,6 +1015,25 @@ bool EpubReaderActivity::launchKOReaderSync() {
   activityManager.replaceActivity(std::make_unique<KOReaderSyncActivity>(
       renderer, mappedInput, savedEpubPath, localPos, std::move(localKoPos), std::move(localChapterName)));
   return true;
+}
+
+void EpubReaderActivity::launchRecap() {
+#if HOMESYNC
+  if (!epub) return;
+  RenderLock renderLock;
+  const int currentPage = section ? section->currentPage : nextPageNumber;
+  const int totalPages = section ? section->estimatedTotalPages() : cachedChapterTotalPageCount;
+  saveProgress(currentSpineIndex, currentPage, totalPages);
+  const CrossPointPosition localPos = getCurrentPosition();
+  SavedProgressPosition koPos;
+  {
+    GfxRenderer::FrameBufferLoan loan(renderer);
+    koPos = ProgressMapper::toSavedProgress(epub, localPos);
+  }
+  activityManager.replaceActivity(std::make_unique<RecapActivity>(renderer, mappedInput, epub->getPath(),
+                                                                  epub->getTitle(), epub->getAuthor(),
+                                                                  koPos.percentage));
+#endif
 }
 
 void EpubReaderActivity::beforeSleep() {

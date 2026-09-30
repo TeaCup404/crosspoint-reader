@@ -26,6 +26,7 @@ class EpubReaderMenuActivity final : public UiListActivity {
     DISPLAY_QR,
     GO_HOME,
     SYNC,
+    STORY_SO_FAR,  // x4pro-homesync: local-LLM recap
     DELETE_CACHE,
     DICTIONARY
   };
