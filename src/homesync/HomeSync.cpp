@@ -77,10 +77,25 @@ void saveState(const State& s) {
 }
 
 time_t nowEpoch() {
+  // RTC chip when the board has one; otherwise the system clock, which keeps
+  // running through deep sleep and silent reboots once SNTP has set it.
+  time_t e = 0;
   struct tm t{};
-  if (!halClock.localTime(t)) return 0;
-  const time_t e = mktime(&t);
+  if (halClock.isAvailable() && halClock.localTime(t)) {
+    e = mktime(&t);
+  } else {
+    e = time(nullptr);
+  }
   return e >= MIN_VALID_EPOCH ? e : 0;
+}
+
+void syncClock() {
+  if (halClock.isAvailable()) {
+    halClock.syncFromNTP();
+    return;
+  }
+  configTime(0, 0, "pool.ntp.org", "time.google.com");
+  for (int i = 0; i < 50 && time(nullptr) < MIN_VALID_EPOCH; ++i) delay(100);
 }
 
 std::string lower(std::string s) {
@@ -115,8 +130,9 @@ bool autoSyncDue() {
   const State s = loadState();
   if (s.autoHours <= 0) return false;
   const time_t now = nowEpoch();
-  // Unknown clock: sync (the sync itself sets the clock from NTP).
-  if (now == 0) return true;
+  // Unknown clock: no auto-sync (it would run on every wake). A manual sync
+  // sets the clock, after which auto-sync works.
+  if (now == 0) return false;
   const time_t last = std::max(s.lastSync, s.lastAttempt);
   return last == 0 || now - last >= static_cast<time_t>(s.autoHours) * 3600;
 }
@@ -138,11 +154,9 @@ Result run(const OpdsServer& server, const std::function<void(const char*)>& sta
   }
   State state = loadState();
 
-  // Keep the RTC honest while we are online; the throttle depends on it.
-  if (halClock.isAvailable()) {
-    status("Setting clock...");
-    halClock.syncFromNTP();
-  }
+  // Keep the clock honest while we are online; the auto-sync throttle needs it.
+  status("Setting clock...");
+  syncClock();
 
   // 1. Resolve which feed to sync.
   std::string feedUrl;
@@ -169,7 +183,7 @@ Result run(const OpdsServer& server, const std::function<void(const char*)>& sta
       result.source = "Newest " + std::to_string(cap) + " books";
     }
   }
-  LOG_INF("SYNC", "Syncing %s", feedUrl.c_str());
+  LOG_INF("SYNC", "Syncing %s (%s)", feedUrl.c_str(), result.source.c_str());
 
   // 2. Walk the feed (following pagination) and collect books not on the device.
   const char* folder = SETTINGS.opdsDownloadFolder;  // "" => SD root
@@ -228,7 +242,7 @@ Result run(const OpdsServer& server, const std::function<void(const char*)>& sta
     Progress p;
     p.index = static_cast<int>(i) + 1;
     p.total = static_cast<int>(todo.size());
-    p.title = t.title.c_str();
+    p.title = t.title;
     progress(p);
     const auto rc = HttpDownloader::downloadToFile(
         t.url, t.path,

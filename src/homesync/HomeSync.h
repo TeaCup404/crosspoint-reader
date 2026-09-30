@@ -29,7 +29,7 @@ constexpr const char* SYNC_ROW_HREF = "homesync:sync";
 struct Progress {
   int index = 0;  // 1-based book being downloaded
   int total = 0;  // books to download this run
-  const char* title = "";
+  std::string title;  // copied: the render task may read it after run() returns
   size_t bytes = 0;
   size_t totalBytes = 0;
 };

@@ -23,7 +23,7 @@ class HomeSyncActivity final : public Activity, private UiAppHost {
   bool preventAutoSleep() override { return state != State::DONE; }
 
  private:
-  enum class State { WIFI, READY, SYNCING, DONE };
+  enum class State { WIFI, AUTO_WIFI, READY, SYNCING, DONE };
 
   OpdsServer server;
   bool automatic;
@@ -36,6 +36,7 @@ class HomeSyncActivity final : public Activity, private UiAppHost {
 
   static void rootScreen(UiScreen& screen, void* user);
   static void onCancelEvent(const freeink::ui::ActionEvent& event, void* user);
+  bool quietConnect();
   void startSync();
   void finish(const homesync::Result& result);
 };

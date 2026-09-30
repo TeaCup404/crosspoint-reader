@@ -9,6 +9,7 @@
 
 #include "MappedInputManager.h"
 #include "SilentRestart.h"
+#include "WifiCredentialStore.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/UITheme.h"
 
@@ -34,7 +35,14 @@ void HomeSyncActivity::onEnter() {
   app.setScreen(&HomeSyncActivity::rootScreen, this);
   cancel = false;
   status = "Connecting to Wi-Fi...";
-  if (automatic) homesync::noteAutoAttempt();
+  if (automatic) {
+    // No Wi-Fi picker on wake: loop() joins a saved network quietly or goes
+    // home (e.g. away from every known network).
+    homesync::noteAutoAttempt();
+    state = State::AUTO_WIFI;
+    requestUpdate();
+    return;
+  }
 
   if (WiFi.status() == WL_CONNECTED && WiFi.localIP() != IPAddress(0, 0, 0, 0)) {
     state = State::READY;  // loop() starts the sync after this frame is on screen
@@ -82,6 +90,14 @@ void HomeSyncActivity::loop() {
   switch (state) {
     case State::WIFI:
       return;
+    case State::AUTO_WIFI:
+      if (quietConnect()) {
+        state = State::READY;
+      } else {
+        LOG_INF("SYNC", "Auto-sync: no known Wi-Fi in range");
+        onGoHome();
+      }
+      return;
     case State::READY:
       startSync();
       return;
@@ -97,6 +113,27 @@ void HomeSyncActivity::loop() {
       return;
     }
   }
+}
+
+bool HomeSyncActivity::quietConnect() {
+  WIFI_STORE.loadFromFile();
+  if (WIFI_STORE.getCredentialCount() == 0) return false;
+  WiFi.mode(WIFI_STA);
+  const int found = WiFi.scanNetworks();
+  for (int i = 0; i < found; ++i) {
+    const auto cred = WIFI_STORE.findCredential(WiFi.SSID(i).c_str());
+    if (!cred) continue;
+    LOG_INF("SYNC", "Auto-sync: joining %s", cred->ssid.c_str());
+    WiFi.begin(cred->ssid.c_str(), cred->password.c_str());
+    for (int t = 0; t < 150 && WiFi.status() != WL_CONNECTED; ++t) delay(100);  // up to 15 s
+    if (WiFi.status() == WL_CONNECTED) {
+      WiFi.scanDelete();
+      return true;
+    }
+    WiFi.disconnect(false);
+  }
+  WiFi.scanDelete();
+  return false;
 }
 
 void HomeSyncActivity::startSync() {
@@ -217,7 +254,7 @@ void HomeSyncActivity::rootScreen(UiScreen& screen, void* user) {
   const std::string count =
       "Book " + std::to_string(self->progress.index) + " of " + std::to_string(self->progress.total);
   screen.target().text(screen.takeTop(lh, gap), count.c_str(), centered);
-  screen.target().text(screen.takeTop(lh, gap), self->progress.title, centered);
+  screen.target().text(screen.takeTop(lh, gap), self->progress.title.c_str(), centered);
 
   const fui::Rect bar = screen.takeTop(barH, gap).inset(fui::Insets{0, 50, 0, 50});
   if (self->progress.totalBytes > 0) {
