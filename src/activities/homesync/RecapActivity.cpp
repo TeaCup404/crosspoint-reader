@@ -193,10 +193,24 @@ void RecapActivity::draw(UiScreen& screen) {
 
   fui::TextStyle text = theme.bodyText;
   if (state != State::SHOWN) text.align = fui::TextAlign::Center;
-  const fui::Rect area = screen.body();
+  fui::Rect area = screen.body();
   const int16_t lh = target.lineHeight(text.font);
-  text.maxLines = static_cast<uint8_t>(std::min(255, std::max(1, area.height / std::max<int16_t>(1, lh))));
-  target.text(area, body.c_str(), text);
+  // The fonts have no newline glyph: lay out each paragraph on its own, with
+  // a gap between them, until the screen is full.
+  size_t start = 0;
+  while (start < body.size() && area.height >= lh) {
+    size_t end = body.find('\n', start);
+    if (end == std::string::npos) end = body.size();
+    const std::string para = body.substr(start, end - start);
+    start = end + 1;
+    if (para.find_first_not_of(" \t\r") == std::string::npos) continue;
+    text.maxLines = static_cast<uint8_t>(std::min(255, area.height / lh));
+    const int16_t h = fui::measureWrappedText(target, para.c_str(), text, area.width).height;
+    target.text(fui::Rect{area.x, area.y, area.width, h}, para.c_str(), text);
+    const int16_t used = static_cast<int16_t>(h + theme.spaceMd);
+    area.y = static_cast<int16_t>(area.y + used);
+    area.height = static_cast<int16_t>(std::max(0, area.height - used));
+  }
 }
 
 void RecapActivity::render(RenderLock&&) {
