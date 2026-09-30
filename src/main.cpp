@@ -34,6 +34,7 @@
 #include "activities/ActivityManager.h"
 #include "activities/settings/SdFirmwareUpdateActivity.h"
 #if HOMESYNC
+#include "WifiCredentialStore.h"
 #include "activities/homesync/HomeSyncActivity.h"
 #include "homesync/HomeSync.h"
 #endif
@@ -596,6 +597,80 @@ void setup() {
   allowSleepAt = millis() + 2000;
 }
 
+#if HOMESYNC
+// USB-serial setup commands (fields tab-separated). Lets a computer configure
+// and drive the reader without typing on it. Passwords are never logged.
+//   CMD:WIFI_ADD <ssid>\t<password>
+//   CMD:OPDS_ADD <name>\t<url>\t<user>\t<password>   (same url = update)
+//   CMD:SYNC                  start "Sync library"
+//   CMD:LIGHT <0-100> <warm 0-100>   brightness 0 = off
+//   CMD:STATUS
+static void handleHomesyncCommand(const String& cmd) {
+  const int space = cmd.indexOf(' ');
+  const String name = space < 0 ? cmd : cmd.substring(0, space);
+  const std::string args = space < 0 ? "" : cmd.substring(space + 1).c_str();
+  std::vector<std::string> f;
+  size_t start = 0;
+  for (size_t tab; (tab = args.find('\t', start)) != std::string::npos; start = tab + 1) {
+    f.push_back(args.substr(start, tab - start));
+  }
+  f.push_back(args.substr(start));
+
+  if (name == "WIFI_ADD" && f.size() == 2 && !f[0].empty()) {
+    WIFI_STORE.loadFromFile();
+    const bool ok = WIFI_STORE.addCredential(f[0], f[1]) && WIFI_STORE.saveToFile();
+    logSerial.printf("HS:WIFI_ADD %s %s\n", f[0].c_str(), ok ? "OK" : "FAIL");
+  } else if (name == "OPDS_ADD" && f.size() == 4 && !f[1].empty()) {
+    const OpdsServer server{f[0], f[1], f[2], f[3]};
+    bool ok = false;
+    const auto& servers = OPDS_STORE.getServers();
+    for (size_t i = 0; i < servers.size(); ++i) {
+      if (servers[i].url == server.url) {
+        ok = OPDS_STORE.updateServer(i, server);
+        break;
+      }
+    }
+    if (!ok) ok = OPDS_STORE.addServer(server);
+    ok = ok && OPDS_STORE.saveToFile();
+    logSerial.printf("HS:OPDS_ADD %s %s\n", server.url.c_str(), ok ? "OK" : "FAIL");
+  } else if (name == "SYNC") {
+    if (!OPDS_STORE.hasServers()) {
+      logSerial.printf("HS:SYNC FAIL no OPDS server\n");
+      return;
+    }
+    activityManager.replaceActivity(
+        std::make_unique<HomeSyncActivity>(renderer, mappedInputManager, OPDS_STORE.getServers()[0], false));
+    logSerial.printf("HS:SYNC started\n");
+  } else if (name == "LIGHT" && f.size() == 1) {
+    int brightness = -1, warm = -1;
+    sscanf(f[0].c_str(), "%d %d", &brightness, &warm);
+    if (brightness < 0 || brightness > 100) {
+      logSerial.printf("HS:LIGHT FAIL\n");
+      return;
+    }
+    if (brightness > 0) {
+      Frontlight.setBrightness(static_cast<uint8_t>(brightness));
+      SETTINGS.frontlightBrightness = static_cast<uint8_t>(brightness);
+    }
+    if (warm >= 0 && warm <= 100) {
+      Frontlight.setWarmth(static_cast<uint8_t>(warm));
+      SETTINGS.frontlightWarmth = static_cast<uint8_t>(warm);
+    }
+    Frontlight.setOn(brightness > 0);
+    SETTINGS.frontlightOn = brightness > 0;
+    SETTINGS.saveToFile();
+    logSerial.printf("HS:LIGHT %d %d OK\n", brightness, warm);
+  } else if (name == "STATUS") {
+    WIFI_STORE.loadFromFile();
+    logSerial.printf("HS:STATUS wifi=%u opds=%u wifiConnected=%d\n",
+                     static_cast<unsigned>(WIFI_STORE.getCredentialCount()),
+                     static_cast<unsigned>(OPDS_STORE.getCount()), WiFi.status() == WL_CONNECTED);
+  } else {
+    logSerial.printf("HS:UNKNOWN %s\n", name.c_str());
+  }
+}
+#endif
+
 void loop() {
   static unsigned long maxLoopDuration = 0;
   const unsigned long loopStartTime = millis();
@@ -651,6 +726,11 @@ void loop() {
         logSerial.write(buf, bufferSize);
         logSerial.printf("SCREENSHOT_END\n");
       }
+#if HOMESYNC
+      else {
+        handleHomesyncCommand(cmd);
+      }
+#endif
     }
   }
 
