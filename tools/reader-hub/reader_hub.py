@@ -16,8 +16,11 @@ import re
 import socket
 import threading
 import time
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+import recap
 
 ROOT = os.environ.get("READER_HUB_ROOT", "/srv/fast/reader-hub")
 OTA_DIR = os.path.join(ROOT, "ota")
@@ -132,6 +135,14 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_bytes(200, body, "application/json; charset=utf-8")
             except Exception as e:  # stats source down: say so, the reader shows it
                 self.send_bytes(502, json.dumps({"error": str(e)}).encode(), "application/json")
+        elif path == "/recap":
+            q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+            try:
+                pct = float(q.get("pct", ["0"])[0])
+                code, body = recap.handle(q.get("title", [""])[0], q.get("author", [""])[0], pct)
+            except Exception as e:
+                code, body = 500, {"status": "error", "message": str(e)[:200]}
+            self.send_bytes(code, json.dumps(body, ensure_ascii=False).encode(), "application/json; charset=utf-8")
         elif path == "/ota/latest.json":
             self.latest()
         elif path.startswith("/ota/") and SAFE_NAME.match(path[5:]):
