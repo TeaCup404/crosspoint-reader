@@ -22,6 +22,18 @@ import serial
 WIDTH, HEIGHT = 800, 480  # X4 Pro panel, native orientation
 
 
+def ask_secret(prompt):
+    """Terminal prompt when there is one; otherwise a macOS dialog with a hidden field."""
+    if sys.stdin.isatty():
+        return getpass.getpass(prompt)
+    script = (f'text returned of (display dialog "{prompt}" default answer "" with hidden answer '
+              f'with title "Reader setup" buttons {{"Cancel", "OK"}} default button "OK")')
+    result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
+    if result.returncode != 0:
+        sys.exit("Cancelled")
+    return result.stdout.rstrip("\n")
+
+
 def open_port():
     ports = glob.glob("/dev/cu.usbmodem*")
     if not ports:
@@ -87,13 +99,13 @@ def main():
     elif op in ("wifi", "opds", "setup"):
         if op in ("wifi", "setup"):
             ssid = args[0] if op == "wifi" else input("Wi-Fi name: ")
-            pw = getpass.getpass(f"Wi-Fi password for {ssid}: ")
+            pw = ask_secret(f"Wi-Fi password for {ssid}: ")
             print(command(port, f"CMD:WIFI_ADD {ssid}\t{pw}"))
         if op in ("opds", "setup"):
             url = args[0] if op == "opds" else (input("Library URL [http://192.168.1.124:8083/opds]: ")
                                                  or "http://192.168.1.124:8083/opds")
             user = args[1] if op == "opds" else (input("User [reader]: ") or "reader")
-            pw = getpass.getpass(f"Password for {user}: ")
+            pw = ask_secret(f"Password for {user}: ")
             print(command(port, f"CMD:OPDS_ADD Home library\t{url}\t{user}\t{pw}"))
     else:
         sys.exit(__doc__)
