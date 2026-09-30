@@ -2,6 +2,7 @@
 
 #include <LibraryIndexFile.h>
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -9,7 +10,9 @@
 
 #include "RecentBooksStore.h"
 #include "activities/UiTabListActivity.h"
+#include "components/HomeCoverCache.h"
 #include "components/OptionPopup.h"
+#include "components/media/cover-grid.h"
 
 // One Library screen: every indexed book on the card shown by recency, title,
 // or author. The Recent shelf orders by file modification time (when a book
@@ -29,12 +32,19 @@
 // ListItems for at most one page). The ordinary shelf therefore keeps one page
 // of strings; an active search additionally uses one fallible uint16_t slot per
 // indexed book so an allocation failure remains recoverable on the C3.
+//
+// On PSRAM boards the rows can instead be shown as a paged cover grid (the
+// Covers view, SETTINGS.libraryView). It is the same ring over the same sort
+// and search: only the body is drawn differently, so selection, tabs, touch
+// rows and the book menu all carry over. Thumbs are generated lazily, one book
+// per idle loop pass, for the visible page only.
 class LibraryListActivity final : public UiTabListActivity {
  public:
   LibraryListActivity(GfxRenderer& renderer, MappedInputManager& mappedInput);
 
   void onEnter() override;
   void onExit() override;
+  void loop() override;
 
  protected:
   // --- UiListActivity / UiTabListActivity contract ---------------------------
@@ -76,8 +86,11 @@ class LibraryListActivity final : public UiTabListActivity {
   void openBookByPath(const std::string& path);
   void promptRebuildIndex();
   void resetAfterRebuild();
-  // Recent-row long-press menu: open / remove from recents / delete / rebuild.
-  void showRecentBookOptions(int entry);
+  // Book menu (Recent rows and every cover): open / remove from recents /
+  // delete / list-or-covers view / rebuild.
+  void showBookOptions(int entry);
+  // The book file behind a list entry (pinned store row or index row).
+  bool entryPath(int entry, std::string& path);
   void promptRemoveRecentBook(const std::string& path, const std::string& title);
   // Long-press delete owns the gesture where grouping does not apply: the
   // Recent sort, degraded lists, and any active search result.
@@ -189,4 +202,52 @@ class LibraryListActivity final : public UiTabListActivity {
   // Row options modal (Recent long-press menu); owned here so it outlives the
   // touch event that opened it.
   OptionPopup optionPopup;
+
+  // --- Covers view -----------------------------------------------------------
+  // One visible cover. The render task (re)resolves a slot whenever the book
+  // at that position changes; the loop task only fills in thumbs.
+  struct CoverSlot {
+    std::string bookPath;
+    std::string title;
+    // Existing thumb at library_covers::THUMB_HEIGHT; empty draws the
+    // placeholder with the title.
+    std::string thumbPath;
+    // Thumb missing and not attempted during this visit.
+    bool pending = false;
+  };
+  // Everything the grid needs, in one allocation that exists only while the
+  // view is on (the cover cache holds a screen-sized PSRAM buffer).
+  struct CoverView {
+    explicit CoverView(GfxRenderer& renderer) : cache(renderer) {}
+    HomeCoverCache cache;
+    freeink::ui::CoverGridProps grid;
+    freeink::ui::TextStyle placeholderText;
+    std::array<CoverSlot, HomeCoverCache::MAX_COVERS> slots;
+    int pageTop = 0;
+    int pageCount = 0;
+    // Books that produced no thumb this visit (path hashes, ring buffer), so
+    // a coverless book is not re-parsed every time its page comes back.
+    std::array<uint32_t, 64> failed{};
+    uint8_t failedCount = 0;
+    uint8_t failedNext = 0;
+  };
+
+  bool coversActive() const { return covers && !groupsCollapsed; }
+  // Allocates the view; false (and stays on the list) when memory is short.
+  bool enableCovers();
+  // Menu toggle: switches the body and persists the choice.
+  void setCoversView(bool on);
+  void buildCoverGrid(UiScreen& screen);
+  // Render task: point the slots at entries [top, top + count).
+  void syncCoverPage(int top, int count);
+  bool paintCover(freeink::ui::DrawTarget& target, freeink::ui::Rect rect, uint16_t entry);
+  // Loop task: generate one missing thumb on the visible page. True when it
+  // did any work.
+  bool generatePendingThumb();
+  // Swipe paging: moves the selection one page, keeping its grid position.
+  void pageCovers(int direction);
+
+  std::unique_ptr<CoverView> covers;
+  // Covers per page as last laid out by the render task (the loop pages by it).
+  int coverPageItems = 9;
 };

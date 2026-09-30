@@ -184,6 +184,10 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   // UI Theme
   enum UI_THEME { CLASSIC = 0, LYRA = 1, LYRA_3_COVERS = 2, ROUNDEDRAFF = 3, COVER_GRID = 4 };
 
+  // Library screen layout: the text list, or a paged cover grid (PSRAM
+  // boards only; see UITheme::supportsCoverGrid).
+  enum LIBRARY_VIEW { LIBRARY_VIEW_LIST = 0, LIBRARY_VIEW_COVERS = 1, LIBRARY_VIEW_COUNT };
+
   // Image rendering in EPUB reader
   enum IMAGE_RENDERING { IMAGES_DISPLAY = 0, IMAGES_PLACEHOLDER = 1, IMAGES_SUPPRESS = 2, IMAGE_RENDERING_COUNT };
 
@@ -339,6 +343,8 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   // Show the title and author read from inside each book rather than its
   // filename. Users can disable this to make index rebuilds skip EPUB parsing.
   uint8_t libraryUseMetadata = 1;
+  // Library layout (LIBRARY_VIEW). Also toggled from the Library's book menu.
+  uint8_t libraryView = LIBRARY_VIEW_LIST;
   // Remove a book from the Recent Books list when its End-of-Book screen is reached (0 = off, 1 = on)
   uint8_t removeReadBooksFromRecents = 0;
   // Move epub to /Read/ folder on SD card when finished (0 = disabled, 1 = enabled)

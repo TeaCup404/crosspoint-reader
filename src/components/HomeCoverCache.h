@@ -13,7 +13,8 @@ class GfxRenderer;
 // Screen-lifetime thumbnail decoding and PSRAM region snapshots.
 class HomeCoverCache {
  public:
-  static constexpr size_t MAX_COVERS = 7;
+  // Slots per screen: the Home grid uses 7, the Library's Covers view up to 12.
+  static constexpr size_t MAX_COVERS = 12;
   explicit HomeCoverCache(GfxRenderer& renderer) : renderer(renderer) {}
   void begin();
   void prepare();
