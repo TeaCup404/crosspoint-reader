@@ -625,6 +625,7 @@ void setup() {
 //   CMD:HOME
 //   CMD:ROUTE TS|AUTO          TS: act as if away from home (test), until reboot
 //   CMD:OTA_CHECK             run the update check and print the result
+//   CMD:OTA_INSTALL           check and, if newer, install + reboot
 //   CMD:SLEEP                 sleep like the power button (runs the KOReader auto-upload)
 //   CMD:STATUS
 static void handleHomesyncCommand(const String& cmd) {
@@ -714,15 +715,22 @@ static void handleHomesyncCommand(const String& cmd) {
   } else if (name == "ROUTE" && f.size() == 1) {
     homesync::tailnet::forceAway = f[0] == "TS";
     logSerial.printf("HS:ROUTE %s OK\n", homesync::tailnet::forceAway ? "TS" : "AUTO");
-  } else if (name == "OTA_CHECK") {
+  } else if (name == "OTA_CHECK" || name == "OTA_INSTALL") {
     if (!homesync::quietConnect()) {
       logSerial.printf("HS:OTA_CHECK FAIL no Wi-Fi\n");
       return;
     }
     OtaUpdater ota;
     const auto rc = ota.checkForUpdate();
+    const bool newer = rc == OtaUpdater::OK && ota.isUpdateNewer();
     logSerial.printf("HS:OTA_CHECK rc=%d latest=%s newer=%d\n", static_cast<int>(rc), ota.getLatestVersion().c_str(),
-                     rc == OtaUpdater::OK && ota.isUpdateNewer());
+                     newer);
+    if (name == "OTA_INSTALL" && newer) {
+      const auto irc = ota.installUpdate();
+      logSerial.printf("HS:OTA_INSTALL rc=%d\n", static_cast<int>(irc));
+      logSerial.flush();
+      if (irc == OtaUpdater::OK) esp_restart();
+    }
   } else if (name == "SLEEP") {
     logSerial.printf("HS:SLEEP OK\n");
     logSerial.flush();

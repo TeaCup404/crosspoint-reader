@@ -274,7 +274,11 @@ bool getImpl(std::string url, const std::string& user, const std::string& passwo
     auto conn = std::make_unique<Conn>();
     if (!conn->open(u.host, u.port, u.tls)) return false;
 
-    std::string req = "GET " + u.path + " HTTP/1.1\r\nHost: " + u.host +
+    // Host carries the port when it is not the scheme default (reader-hub builds
+    // its download links from it).
+    const bool defaultPort = u.port == (u.tls ? 443 : 80);
+    const std::string host = defaultPort ? u.host : u.host + ":" + std::to_string(u.port);
+    std::string req = "GET " + u.path + " HTTP/1.1\r\nHost: " + host +
                       "\r\nUser-Agent: CrossPoint-homesync\r\nAccept-Encoding: identity\r\nConnection: close\r\n";
     if (!user.empty()) req += "Authorization: Basic " + basicAuth(user, password) + "\r\n";
     req += "\r\n";
