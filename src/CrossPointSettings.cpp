@@ -406,6 +406,9 @@ int CrossPointSettings::getReaderFontId() const {
   // carried over from an SD family may not be one of them. ensureLoaded()
   // normally persists the snap; snap again here (without allocating — this runs
   // in the page render loop) so rendering is correct even before it has run.
+#ifdef OMIT_FONTS
+  return NOTOSERIF_14_FONT_ID;  // the only built-in reader font in this build
+#else
   const uint8_t pt =
       snapToNearestPointSize(BUILTIN_READER_POINT_SIZES, std::size(BUILTIN_READER_POINT_SIZES), fontPointSize);
   const bool sans = (fontFamily == NOTOSANS);
@@ -420,4 +423,5 @@ int CrossPointSettings::getReaderFontId() const {
     default:
       return sans ? NOTOSANS_14_FONT_ID : NOTOSERIF_14_FONT_ID;
   }
+#endif
 }

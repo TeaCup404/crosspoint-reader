@@ -4,8 +4,9 @@
 #include <array>
 
 #include "HyphenationCommon.h"
-#include "generated/hyph-de.trie.h"
 #include "generated/hyph-en.trie.h"
+#ifndef HYPHENATION_ENGLISH_ONLY
+#include "generated/hyph-de.trie.h"
 #include "generated/hyph-es.trie.h"
 #include "generated/hyph-fi.trie.h"
 #include "generated/hyph-fr.trie.h"
@@ -15,11 +16,20 @@
 #include "generated/hyph-ru.trie.h"
 #include "generated/hyph-sv.trie.h"
 #include "generated/hyph-uk.trie.h"
+#endif
 
 namespace {
 
 // English hyphenation patterns (3/3 minimum prefix/suffix length)
 LanguageHyphenator englishHyphenator(en_patterns, isLatinLetter, toLowerLatin, 3, 3);
+#ifdef HYPHENATION_ENGLISH_ONLY
+using EntryArray = std::array<LanguageEntry, 1>;
+
+const EntryArray& entries() {
+  static const EntryArray kEntries = {{{"english", "en", &englishHyphenator}}};
+  return kEntries;
+}
+#else
 LanguageHyphenator frenchHyphenator(fr_patterns, isLatinLetter, toLowerLatin);
 LanguageHyphenator germanHyphenator(de_patterns, isLatinLetter, toLowerLatin);
 LanguageHyphenator russianHyphenator(ru_patterns, isCyrillicLetter, toLowerCyrillic);
@@ -47,6 +57,7 @@ const EntryArray& entries() {
                                        {"portuguese", "pt", &portugueseHyphenator}}};
   return kEntries;
 }
+#endif
 
 }  // namespace
 

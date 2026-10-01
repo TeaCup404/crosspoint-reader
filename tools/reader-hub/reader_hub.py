@@ -28,6 +28,10 @@ OTA_DIR = os.path.join(ROOT, "ota")
 BIND = os.environ.get("READER_HUB_BIND", "192.168.1.124,100.86.140.113").split(",")
 PORT = int(os.environ.get("READER_HUB_PORT", "8790"))
 SAFE_NAME = re.compile(r"^[A-Za-z0-9._-]+\.bin$")
+# Reader fonts (.cpfont), mirrored from the CrossPoint fonts release by
+# fonts_mirror.py; the firmware's font downloader reads /fonts/fonts.json.
+FONT_DIR = os.path.join(ROOT, "fonts")
+SAFE_FONT = re.compile(r"^[A-Za-z0-9._-]+\.cpfont$")
 
 # ---- server dashboard for the reader ----
 # Composed from homebot-dash's /api/stats (read-only; dash.py is not touched).
@@ -199,7 +203,11 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/ota/latest.json":
             self.latest()
         elif path.startswith("/ota/") and SAFE_NAME.match(path[5:]):
-            self.firmware(path[5:])
+            self.send_file(OTA_DIR, path[5:])
+        elif path == "/fonts/fonts.json":
+            self.fonts_manifest()
+        elif path.startswith("/fonts/") and SAFE_FONT.match(path[7:]):
+            self.send_file(FONT_DIR, path[7:])
         else:
             self.send_bytes(404, b"not found\n", "text/plain")
 
@@ -216,8 +224,19 @@ class Handler(BaseHTTPRequestHandler):
             asset["browser_download_url"] = f"http://{host}/ota/{asset['name']}"
         self.send_bytes(200, json.dumps(release).encode(), "application/json")
 
-    def firmware(self, name):
-        full = os.path.join(OTA_DIR, name)
+    def fonts_manifest(self):
+        try:
+            with open(os.path.join(FONT_DIR, "fonts.json"), "rb") as f:
+                manifest = json.load(f)
+        except (OSError, ValueError):
+            self.send_bytes(404, b'{"message":"no fonts"}', "application/json")
+            return
+        host = self.headers.get("Host") or f"{BIND[0]}:{PORT}"
+        manifest["baseUrl"] = f"http://{host}/fonts/"
+        self.send_bytes(200, json.dumps(manifest).encode(), "application/json")
+
+    def send_file(self, folder, name):
+        full = os.path.join(folder, name)
         try:
             size = os.path.getsize(full)
             f = open(full, "rb")

@@ -9,7 +9,9 @@
 // compiles the whole path out: FreeType never links, .ttf/.otf files are
 // invisible to the font registry, and .cpfont SD fonts remain the only
 // sideloaded-font route on those boards.
-#ifdef BOARD_HAS_PSRAM
+// CROSSPOINT_DISABLE_VECTOR_FONTS drops it on PSRAM boards too (slim builds
+// that only use built-in and .cpfont fonts).
+#if defined(BOARD_HAS_PSRAM) && !defined(CROSSPOINT_DISABLE_VECTOR_FONTS)
 #define CROSSPOINT_VECTOR_FONTS 1
 #else
 #define CROSSPOINT_VECTOR_FONTS 0

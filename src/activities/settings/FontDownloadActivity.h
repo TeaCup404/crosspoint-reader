@@ -14,6 +14,10 @@
 // support a new manifest schema.
 #define FONTS_MANIFEST_VERSION 1
 
+#if HOMESYNC && !defined(FONT_MANIFEST_URL)
+// reader-hub's mirror (tools/reader-hub/fonts_mirror.py); via Tailscale when away.
+#define FONT_MANIFEST_URL "http://192.168.1.124:8790/fonts/fonts.json"
+#endif
 #ifndef FONT_MANIFEST_URL
 // Manifest + .cpfont assets are published by .github/workflows/release-fonts.yml
 // to the crosspoint-fonts repo under the "sd-fonts-m<META>-b<BIN>" tag. The tag
