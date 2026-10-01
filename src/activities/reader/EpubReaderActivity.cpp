@@ -1540,6 +1540,20 @@ void EpubReaderActivity::renderBook() {
     renderContents(std::move(p), orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft);
     LOG_DBG("ERS", "Rendered page in %dms", millis() - start);
     lastRenderCompleteMs = millis();
+#if HOMESYNC
+    // Page-turn latency probe: the per-stage "Page render" lines plus input ->
+    // done go to reader-hub once per boot (diag "perf", sent at the next sleep).
+    static uint8_t perfTurns = 0;
+    if (lastPageTurnTime != 0 && lastRenderCompleteMs - lastPageTurnTime < 10000) {
+      LOG_INF("ERS", "Turn latency: %lu ms (input -> page done)", lastRenderCompleteMs - lastPageTurnTime);
+      if (++perfTurns == 6) {
+        char detail[64];
+        snprintf(detail, sizeof(detail), "textAA=%u refreshEvery=%d", SETTINGS.textAntiAliasing,
+                 SETTINGS.getRefreshFrequency());
+        homesync::diag::record("perf", detail);
+      }
+    }
+#endif
     markPageRendered();
   }
 
