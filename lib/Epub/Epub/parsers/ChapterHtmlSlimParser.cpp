@@ -2071,6 +2071,7 @@ bool ChapterHtmlSlimParser::beginParse() {
   paragraphAlignmentBlockStyle.alignment = align;
   startNewTextBlock(paragraphAlignmentBlockStyle);
 
+  voidTagRepair_ = VoidTagRepair();
   xmlParser_ = XML_ParserCreate(nullptr);
   if (!xmlParser_) {
     LOG_ERR("EHP", "Couldn't allocate memory for parser");
@@ -2108,13 +2109,16 @@ ChapterHtmlSlimParser::ParseStatus ChapterHtmlSlimParser::parseStep() {
     return ParseStatus::Error;
   }
 
-  void* const buf = XML_GetBuffer(xmlParser_, PARSE_BUFFER_SIZE);
+  // Read into the tail of the expat buffer and repair HTML-style unclosed void tags
+  // (`<meta charset="utf-8">`, `<br>`) in place towards its head; see VoidTagRepair.h.
+  constexpr size_t REPAIR_SLACK = VoidTagRepair::maxGrowth(PARSE_BUFFER_SIZE);
+  char* const buf = static_cast<char*>(XML_GetBuffer(xmlParser_, PARSE_BUFFER_SIZE + REPAIR_SLACK));
   if (!buf) {
     LOG_ERR("EHP", "Couldn't allocate memory for buffer");
     return ParseStatus::Error;
   }
 
-  const size_t len = parseFile_.read(buf, PARSE_BUFFER_SIZE);
+  const size_t len = parseFile_.read(buf + REPAIR_SLACK, PARSE_BUFFER_SIZE);
 
   if (len == 0 && parseFile_.available() > 0) {
     LOG_ERR("EHP", "File read error");
@@ -2122,8 +2126,9 @@ ChapterHtmlSlimParser::ParseStatus ChapterHtmlSlimParser::parseStep() {
   }
 
   const int done = parseFile_.available() == 0;
+  const size_t outLen = voidTagRepair_.process(buf + REPAIR_SLACK, len, buf, done);
 
-  if (XML_ParseBuffer(xmlParser_, static_cast<int>(len), done) == XML_STATUS_ERROR) {
+  if (XML_ParseBuffer(xmlParser_, static_cast<int>(outLen), done) == XML_STATUS_ERROR) {
     if (htmlEnded_) {
       LOG_DBG("EHP", "Ignoring trailing data after </html>: %s", XML_ErrorString(XML_GetErrorCode(xmlParser_)));
       return ParseStatus::Done;

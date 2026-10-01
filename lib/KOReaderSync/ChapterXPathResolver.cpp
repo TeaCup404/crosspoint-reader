@@ -1,6 +1,7 @@
 #include "ChapterXPathResolver.h"
 
 #include <Epub/VisibleTextUtils.h>
+#include <Epub/parsers/VoidTagRepair.h>
 #include <Logging.h>
 #include <Print.h>
 #include <Utf8.h>
@@ -78,6 +79,15 @@ size_t countUtf8Codepoints(const XML_Char* data, const int len) {
   return count;
 }
 
+// Same repair as ChapterHtmlSlimParser applies before expat: books whose XHTML
+// has unclosed void tags (`<meta charset="utf-8">`) would otherwise fail to
+// parse here too, and progress mapping for them would always fail.
+XML_Status parseRepaired(XML_Parser parser, VoidTagRepair& repair, const char* data, size_t len, bool final) {
+  std::vector<char> out(len + VoidTagRepair::maxGrowth(len));
+  const size_t n = repair.process(data, len, out.data(), final);
+  return XML_Parse(parser, out.data(), static_cast<int>(n), final ? XML_TRUE : XML_FALSE);
+}
+
 class ParagraphTextCounter final : public Print {
  public:
   ParagraphTextCounter() {
@@ -101,7 +111,7 @@ class ParagraphTextCounter final : public Print {
       return parseOk;
     }
 
-    if (XML_Parse(parser, "", 0, XML_TRUE) == XML_STATUS_ERROR) {
+    if (parseRepaired(parser, voidTagRepair, "", 0, true) == XML_STATUS_ERROR) {
       LOG_ERR("KOX", "Final XML parse error: %s", XML_ErrorString(XML_GetErrorCode(parser)));
       parseOk = false;
     }
@@ -115,7 +125,7 @@ class ParagraphTextCounter final : public Print {
       return size;
     }
 
-    if (XML_Parse(parser, reinterpret_cast<const char*>(buffer), static_cast<int>(size), XML_FALSE) != XML_STATUS_OK) {
+    if (parseRepaired(parser, voidTagRepair, reinterpret_cast<const char*>(buffer), size, false) != XML_STATUS_OK) {
       const enum XML_Error error = XML_GetErrorCode(parser);
       if (error != XML_ERROR_ABORTED) {
         LOG_ERR("KOX", "XML parse error: %s", XML_ErrorString(error));
@@ -197,6 +207,7 @@ class ParagraphTextCounter final : public Print {
 
  private:
   XML_Parser parser = nullptr;
+  VoidTagRepair voidTagRepair;  // HTML-style <meta ...> / <br> (see VoidTagRepair.h)
   bool parseOk = true;
   bool insideBody = false;
   bool stopped = false;
@@ -229,7 +240,7 @@ class XPathParagraphResolver final : public Print {
       return parseOk;
     }
 
-    if (XML_Parse(parser, "", 0, XML_TRUE) == XML_STATUS_ERROR) {
+    if (parseRepaired(parser, voidTagRepair, "", 0, true) == XML_STATUS_ERROR) {
       LOG_ERR("KOX", "Final XML parse error: %s", XML_ErrorString(XML_GetErrorCode(parser)));
       parseOk = false;
     }
@@ -246,7 +257,7 @@ class XPathParagraphResolver final : public Print {
       return size;
     }
 
-    if (XML_Parse(parser, reinterpret_cast<const char*>(buffer), static_cast<int>(size), XML_FALSE) != XML_STATUS_OK) {
+    if (parseRepaired(parser, voidTagRepair, reinterpret_cast<const char*>(buffer), size, false) != XML_STATUS_OK) {
       const enum XML_Error error = XML_GetErrorCode(parser);
       if (error != XML_ERROR_ABORTED) {
         LOG_ERR("KOX", "XML parse error: %s", XML_ErrorString(error));
@@ -328,6 +339,7 @@ class XPathParagraphResolver final : public Print {
   }
 
   XML_Parser parser = nullptr;
+  VoidTagRepair voidTagRepair;  // HTML-style <meta ...> / <br> (see VoidTagRepair.h)
   const int targetParagraph;
   bool parseOk = true;
   bool insideBody = false;
@@ -371,7 +383,7 @@ class XPathProgressResolver final : public Print {
       return parseOk;
     }
 
-    if (XML_Parse(parser, "", 0, XML_TRUE) == XML_STATUS_ERROR) {
+    if (parseRepaired(parser, voidTagRepair, "", 0, true) == XML_STATUS_ERROR) {
       LOG_ERR("KOX", "Final XML parse error: %s", XML_ErrorString(XML_GetErrorCode(parser)));
       parseOk = false;
     }
@@ -388,7 +400,7 @@ class XPathProgressResolver final : public Print {
       return size;
     }
 
-    if (XML_Parse(parser, reinterpret_cast<const char*>(buffer), static_cast<int>(size), XML_FALSE) != XML_STATUS_OK) {
+    if (parseRepaired(parser, voidTagRepair, reinterpret_cast<const char*>(buffer), size, false) != XML_STATUS_OK) {
       const enum XML_Error error = XML_GetErrorCode(parser);
       if (error != XML_ERROR_ABORTED) {
         LOG_ERR("KOX", "XML parse error: %s", XML_ErrorString(error));
@@ -557,6 +569,7 @@ class XPathProgressResolver final : public Print {
   }
 
   XML_Parser parser = nullptr;
+  VoidTagRepair voidTagRepair;  // HTML-style <meta ...> / <br> (see VoidTagRepair.h)
   const size_t targetVisibleChar;
   const BoundaryMode boundaryMode;
   bool parseOk = true;
