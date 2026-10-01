@@ -20,7 +20,7 @@ enum class HomeButtonAction : uint8_t {
 
 class HomeButtonInput {
  public:
-  static constexpr uint32_t DOUBLE_TAP_MS = 350;
+  static constexpr uint32_t DOUBLE_TAP_MS = 250;
 
   HomeButtonAction update(uint32_t now, bool tapped, bool held, bool swiped, bool pressed, HomeButtonAction tap,
                           HomeButtonAction doubleTap, HomeButtonAction longPress) {

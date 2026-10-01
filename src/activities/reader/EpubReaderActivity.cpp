@@ -977,8 +977,10 @@ unsigned long EpubReaderActivity::confirmLongPressThreshold() const {
 #if HOMESYNC
 void EpubReaderActivity::pollKoPull() {
   if (!pullStarted) {
-    // After the first page is on screen, so opening a book never waits on Wi-Fi.
-    if (lastRenderCompleteMs == 0) return;
+    // Once a page has stayed up for a while: opening a book never waits on
+    // Wi-Fi, and the scan/TLS work doesn't slow the first page turns.
+    constexpr unsigned long PULL_AFTER_IDLE_MS = 8000;
+    if (lastRenderCompleteMs == 0 || millis() - lastRenderCompleteMs < PULL_AFTER_IDLE_MS) return;
     pullStarted = true;
     if (!homesync::koauto::wanted()) return;
     RenderLock renderLock;

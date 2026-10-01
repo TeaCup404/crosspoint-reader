@@ -11,11 +11,11 @@ TEST(HomeButtonInput, RecognizesConfiguredGestures) {
     return input.update(now, tap, hold, swipe, press, A::Home, A::ToggleFrontlight, A::ReaderMenu);
   };
   EXPECT_EQ(tick(0, true), A::Ignore);
-  EXPECT_EQ(tick(350), A::Ignore);
-  EXPECT_EQ(tick(351), A::Home);
-  EXPECT_EQ(tick(352), A::Ignore);
+  EXPECT_EQ(tick(250), A::Ignore);
+  EXPECT_EQ(tick(251), A::Home);
+  EXPECT_EQ(tick(252), A::Ignore);
   EXPECT_EQ(tick(1000, true), A::Ignore);
-  EXPECT_EQ(tick(1350, true), A::ToggleFrontlight);
+  EXPECT_EQ(tick(1250, true), A::ToggleFrontlight);
   EXPECT_EQ(tick(1701), A::Ignore);
   EXPECT_EQ(tick(2000, false, true), A::ReaderMenu);
   EXPECT_EQ(tick(2001), A::Ignore);

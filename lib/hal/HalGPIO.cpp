@@ -160,6 +160,16 @@ bool HalGPIO::wasAnyReleased() const { return inputMgr.wasAnyReleased(); }
 
 bool HalGPIO::rawInputActive() {
   if (inputMgr.isPowerButtonPhysicallyPressed()) return true;
+  const auto& cfg = BoardConfig::ACTIVE;
+  if (cfg.inputStyle == BoardConfig::InputStyle::DigitalButtons) {
+    // Plain active-low GPIO buttons (X4 Pro): the ladder read below sees none of them.
+    for (const int8_t pin : {cfg.input.back, cfg.input.confirm, cfg.input.left, cfg.input.right, cfg.input.up,
+                             cfg.input.down}) {
+      if (pin >= 0 && digitalRead(pin) == LOW) return true;
+    }
+  }
+  // Touch controller pulls its IRQ low while it has a report (a finger is down).
+  if (cfg.touch.irq >= 0 && digitalRead(cfg.touch.irq) == LOW) return true;
   InputManager::ButtonAdcSample g1{}, g2{};
   inputMgr.readButtonAdc(g1, g2);
   // The Xteink ladder idles at the ADC full-scale rail (~4095); every button band sits below 3900.
