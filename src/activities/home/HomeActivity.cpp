@@ -289,6 +289,10 @@ void HomeActivity::onExit() {
   coverGridUi.reset();
 #if HOMESYNC
   readingUi.reset();
+  // Home is cover-heavy (dithered greys); a fast refresh into the next screen
+  // leaves a visible ghost of it behind Settings, Library, etc. One clean
+  // refresh on the way out clears it.
+  renderer.promoteNextRefresh(HalDisplay::HALF_REFRESH);
 #endif
 
   // Free the stored cover buffer if any
