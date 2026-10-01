@@ -13,6 +13,7 @@ files that are missing or changed.
 import json
 import os
 import sys
+import time
 import urllib.request
 import zlib
 
@@ -49,9 +50,17 @@ def main():
             if os.path.exists(path) and os.path.getsize(path) == entry["size"] and crc_of(path) == entry["crc32"]:
                 continue
             tmp = path + ".part"
-            with urllib.request.urlopen(base + entry["name"], timeout=120) as r, open(tmp, "wb") as out:
-                while chunk := r.read(1 << 16):
-                    out.write(chunk)
+            for attempt in range(4):  # GitHub's CDN times out now and then
+                try:
+                    with urllib.request.urlopen(base + entry["name"], timeout=120) as r, open(tmp, "wb") as out:
+                        while chunk := r.read(1 << 16):
+                            out.write(chunk)
+                    break
+                except OSError as e:
+                    print(f"  retry {entry['name']}: {e}", flush=True)
+                    time.sleep(5 * (attempt + 1))
+            else:
+                raise SystemExit(f"Download failed: {entry['name']}")
             if crc_of(tmp) != entry["crc32"]:
                 os.remove(tmp)
                 raise SystemExit(f"CRC mismatch: {entry['name']}")
