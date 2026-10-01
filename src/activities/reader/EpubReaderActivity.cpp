@@ -48,6 +48,7 @@
 #include "util/ScreenshotUtil.h"
 #if HOMESYNC
 #include "activities/homesync/RecapActivity.h"
+#include "homesync/Diag.h"
 #include "homesync/KoAuto.h"
 #endif
 
@@ -1202,6 +1203,16 @@ void EpubReaderActivity::renderBook() {
   };
 
   const auto showBuildError = [this]() {
+#if HOMESYNC
+    // Once per open book: keep the log lines for remote debugging (sent to
+    // reader-hub the next time the reader is online).
+    if (!buildErrorRecorded) {
+      buildErrorRecorded = true;
+      homesync::diag::record("Failed to index", epub->getPath() + " spine " + std::to_string(currentSpineIndex) +
+                                                    " heap " + std::to_string(ESP.getFreeHeap()) + "/" +
+                                                    std::to_string(ESP.getMaxAllocHeap()));
+    }
+#endif
     renderer.clearScreen();
     const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);

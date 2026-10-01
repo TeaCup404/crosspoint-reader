@@ -16,6 +16,7 @@
 #include "SilentRestart.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/UITheme.h"
+#include "homesync/Diag.h"
 #include "homesync/Tailnet.h"
 #include "network/HttpDownloader.h"
 
@@ -113,6 +114,7 @@ void ServerDashActivity::load() {
   }
 
   viaTailnet = viaTailnet || homesync::tailnet::isUp();
+  if (ok && homesync::diag::pending()) homesync::diag::flush();
   if (!ok || !parse(body)) {
     state = State::FAILED;
     error = ok ? "Unexpected reply from the server" : "Server not reachable";

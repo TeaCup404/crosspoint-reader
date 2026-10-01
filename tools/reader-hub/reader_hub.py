@@ -135,6 +135,21 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_bytes(200, body, "application/json; charset=utf-8")
             except Exception as e:  # stats source down: say so, the reader shows it
                 self.send_bytes(502, json.dumps({"error": str(e)}).encode(), "application/json")
+        elif path == "/diag":
+            # Remote diagnostics from the reader (homesync::diag): appended per day.
+            q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+            kind = re.sub(r"[^a-z]", "", q.get("kind", ["diag"])[0])[:16] or "diag"
+            text = q.get("text", [""])[0]
+            version = q.get("version", ["?"])[0][:40]
+            part = q.get("part", ["0"])[0][:6]
+            os.makedirs(os.path.join(ROOT, "diag"), exist_ok=True)
+            name = os.path.join(ROOT, "diag", time.strftime("%Y-%m-%d") + f"-{kind}.txt")
+            with open(name, "a") as f:
+                if part == "0":
+                    f.write(f"\n##### {time.strftime('%H:%M:%S')} from {self.client_address[0]} ({version})\n")
+                f.write(text)
+            print(f"diag {kind} part {part}: {len(text)} chars -> {name}", flush=True)
+            self.send_bytes(200, b"ok\n", "text/plain")
         elif path == "/recap":
             q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
             try:

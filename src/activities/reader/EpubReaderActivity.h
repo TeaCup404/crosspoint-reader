@@ -166,6 +166,7 @@ class EpubReaderActivity final : public ReaderActivity {
   void openDictionaryWordSelect();
   bool launchKOReaderSync();
   void launchRecap();
+  bool buildErrorRecorded = false;
 
  public:
   void beforeSleep() override;

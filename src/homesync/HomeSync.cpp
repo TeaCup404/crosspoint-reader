@@ -20,6 +20,7 @@
 #include "network/HttpDownloader.h"
 #include "util/BookCacheUtils.h"
 #include "util/LibraryCoverThumbs.h"
+#include "Diag.h"
 #if HOMESYNC
 #include "Tailnet.h"
 #endif
@@ -187,6 +188,8 @@ Result run(const OpdsServer& server, const std::function<void(const char*)>& sta
     return result;
   }
   State state = loadState();
+
+  if (diag::pending()) diag::flush();
 
   // Keep the clock honest while we are online; the auto-sync throttle needs it.
   status("Setting clock...");

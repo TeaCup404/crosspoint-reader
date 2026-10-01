@@ -8,6 +8,7 @@
 #include "KOReaderCredentialStore.h"
 #include "KOReaderDocumentId.h"
 #include "KOReaderSyncClient.h"
+#include "Diag.h"
 #include "QuietWifi.h"
 
 namespace homesync::koauto {
@@ -48,13 +49,17 @@ void capture(const std::string& epubPath, const std::string& xpath, const float 
 }
 
 void uploadCaptured() {
-  if (!captured.valid) return;
+  const bool havePosition = captured.valid;
+  const bool haveDiag = diag::pending();
+  if (!havePosition && !haveDiag) return;
   captured.valid = false;
   const uint32_t started = millis();
   if (!quietConnect(WIFI_JOIN_MS)) {
     LOG_INF("KOAUTO", "No known Wi-Fi in range, skipped");
     return;
   }
+  if (haveDiag) diag::flush();
+  if (!havePosition) return;
   KOReaderProgress progress{};
   progress.document = KOREADER_STORE.getMatchMethod() == DocumentMatchMethod::FILENAME
                           ? KOReaderDocumentId::calculateFromFilename(captured.path)
