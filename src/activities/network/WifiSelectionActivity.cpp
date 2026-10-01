@@ -833,6 +833,21 @@ void WifiSelectionActivity::render(RenderLock&&) {
     return;
   }
 
+#if HOMESYNC
+  // Joining a saved network needs no input: keep the screen the user came
+  // from and show a small popup instead of the full Wi-Fi page. The network
+  // list only appears if no saved network connects.
+  if (autoConnecting && (state == WifiSelectionState::SCANNING || state == WifiSelectionState::AUTO_CONNECTING ||
+                         state == WifiSelectionState::CONNECTING)) {
+    const std::string msg = selectedSSID.empty() || state == WifiSelectionState::SCANNING
+                                ? std::string("Connecting to Wi-Fi...")
+                                : "Connecting to " + selectedSSID + "...";
+    GUI.drawPopup(renderer, msg.c_str());
+    renderer.displayBuffer();
+    return;
+  }
+#endif
+
   renderer.clearScreen();
 
   auto& theme = UITheme::getInstance();
