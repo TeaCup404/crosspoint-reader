@@ -41,6 +41,7 @@
 #include "activities/homesync/RecapActivity.h"
 #include "homesync/HomeSync.h"
 #include "homesync/KoAuto.h"
+#include "homesync/AutoLight.h"
 #include "KOReaderSyncClient.h"
 #include "homesync/QuietWifi.h"
 #include "network/OtaUpdater.h"
@@ -476,6 +477,9 @@ void setup() {
   const bool restoreLightOn =
       isSilentReboot ? silentRebootLightOn : (SETTINGS.frontlightOn != 0 && SETTINGS.frontlightRestoreOnWake != 0);
   Frontlight.begin(SETTINGS.frontlightBrightness, SETTINGS.frontlightWarmth, restoreLightOn);
+#if HOMESYNC
+  homesync::autolight::begin(isSilentReboot);
+#endif
 
   switch (wakeupReason) {
     case HalGPIO::WakeupReason::PowerButton:
@@ -983,6 +987,9 @@ void loop() {
     activityManager.requestUpdate();
   }
 
+#if HOMESYNC
+  homesync::autolight::tick();
+#endif
   const unsigned long activityStartTime = millis();
   activityManager.loop();
   const unsigned long activityDuration = millis() - activityStartTime;
