@@ -31,7 +31,8 @@ void capture(const std::string& epubPath, const std::string& xpath, float percen
              const std::string& author);
 
 // Called from the sleep path after the sleep screen is painted and before the
-// radio/SD are shut down. Bounded (~15 s worst case); never throws the sleep.
+// radio/SD are shut down. Bounded: ~15 s at home, up to ~60 s more when away
+// (Tailscale join); never throws the sleep.
 void uploadCaptured();
 
 // ---- pull on open ----
@@ -44,6 +45,8 @@ void skipPullOnce();  // the next startPull() is ignored (silent restart into th
 void startPull(const std::string& epubPath, float localPercentage);
 PullResult pullResult();
 void clearPull();
+// Asks a running pull to stop early (it then turns Wi-Fi off as usual).
+void cancelPull();
 // Waits (bounded) for a running pull before something else uses Wi-Fi.
 void waitForPull(uint32_t maxMs);
 

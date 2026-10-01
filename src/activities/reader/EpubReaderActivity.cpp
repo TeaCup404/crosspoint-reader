@@ -978,8 +978,9 @@ unsigned long EpubReaderActivity::confirmLongPressThreshold() const {
 void EpubReaderActivity::pollKoPull() {
   if (!pullStarted) {
     // After the first page is on screen, so opening a book never waits on Wi-Fi.
-    if (lastRenderCompleteMs == 0 || !homesync::koauto::wanted()) return;
+    if (lastRenderCompleteMs == 0) return;
     pullStarted = true;
+    if (!homesync::koauto::wanted()) return;
     RenderLock renderLock;
     SavedProgressPosition koPos;
     {
@@ -999,6 +1000,10 @@ void EpubReaderActivity::pollKoPull() {}
 
 bool EpubReaderActivity::launchKOReaderSync(const bool autoPull) {
   if (!KOREADER_STORE.hasCredentials()) return false;
+#if HOMESYNC
+  if (!autoPull) homesync::koauto::cancelPull();
+  homesync::koauto::waitForPull(5000);
+#endif
 
   RenderLock renderLock;
 
@@ -1048,6 +1053,8 @@ bool EpubReaderActivity::launchKOReaderSync(const bool autoPull) {
 void EpubReaderActivity::launchRecap() {
 #if HOMESYNC
   if (!epub) return;
+  homesync::koauto::cancelPull();
+  homesync::koauto::waitForPull(5000);
   RenderLock renderLock;
   const int currentPage = section ? section->currentPage : nextPageNumber;
   const int totalPages = section ? section->estimatedTotalPages() : cachedChapterTotalPageCount;

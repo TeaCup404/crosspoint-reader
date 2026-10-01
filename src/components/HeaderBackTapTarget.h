@@ -24,10 +24,12 @@ inline void set(const int newX, const int newY, const int newW, const int newH) 
 inline void clear() { w = 0; }
 
 // Finger slop around the drawn button: a near miss would otherwise land on the
-// status band beside it, which opens the light panel.
+// status band beside it, which opens the light panel. Barely any downward, so
+// the first content row below the header keeps its taps.
 inline constexpr int SLOP = 28;
+inline constexpr int SLOP_BELOW = 4;
 
 inline bool contains(const int tx, const int ty) {
-  return w > 0 && tx >= x - SLOP && tx < x + w + SLOP && ty >= y - SLOP && ty < y + h + SLOP;
+  return w > 0 && tx >= x - SLOP && tx < x + w + SLOP && ty >= y - SLOP && ty < y + h + SLOP_BELOW;
 }
 }  // namespace HeaderBackTapTarget

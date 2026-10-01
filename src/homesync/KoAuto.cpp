@@ -72,6 +72,8 @@ constexpr float PULL_MARGIN = 0.002f;                   // ignore float noise be
 constexpr uint32_t PULL_WIFI_MS = 6000;
 
 volatile PullResult pullState = PullResult::None;
+bool pullCancel = false;
+TaskHandle_t pullTaskHandle = nullptr;
 bool pullSkip = false;
 std::string pulledPath;  // books already checked this boot
 std::string pullPath;
@@ -85,10 +87,10 @@ std::string documentIdFor(const std::string& path) {
 
 void pullTask(void*) {
   PullResult result = PullResult::None;
-  if (quietConnect(PULL_WIFI_MS)) {
+  if (quietConnect(PULL_WIFI_MS) && !pullCancel) {
     KOReaderProgress remote{};
     const auto status = KOReaderSyncClient::getProgress(documentIdFor(pullPath), remote);
-    if (status == KOReaderSyncClient::OK && remote.deviceId != OWN_DEVICE_ID &&
+    if (!pullCancel && status == KOReaderSyncClient::OK && remote.deviceId != OWN_DEVICE_ID &&
         remote.percentage > pullLocal + PULL_MARGIN) {
       LOG_INF("KOAUTO", "Server is ahead: %.2f%% (%s) vs %.2f%%", remote.percentage * 100.0f, remote.device.c_str(),
               pullLocal * 100.0f);
@@ -102,6 +104,8 @@ void pullTask(void*) {
     WiFi.disconnect(true);
     WiFi.mode(WIFI_OFF);
   }
+  LOG_DBG("KOAUTO", "Pull task stack left: %u", static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
+  pullTaskHandle = nullptr;
   pullState = result;
   vTaskDelete(nullptr);
 }
@@ -119,9 +123,10 @@ void startPull(const std::string& epubPath, const float localPercentage) {
   pulledPath = epubPath;
   pullPath = epubPath;
   pullLocal = localPercentage;
+  pullCancel = false;
   pullState = PullResult::Pending;
   // TLS (wolfSSL) and MicroLink need a deep stack; this runs once per book open.
-  if (xTaskCreate(pullTask, "KoPull", 12288, nullptr, 1, nullptr) != pdPASS) {
+  if (xTaskCreate(pullTask, "KoPull", 16384, nullptr, 1, &pullTaskHandle) != pdPASS) {
     LOG_ERR("KOAUTO", "Pull task not started");
     pullState = PullResult::None;
   }
@@ -131,6 +136,10 @@ PullResult pullResult() { return pullState; }
 
 void clearPull() {
   if (pullState != PullResult::Pending) pullState = PullResult::None;
+}
+
+void cancelPull() {
+  if (pullState == PullResult::Pending) pullCancel = true;
 }
 
 void waitForPull(const uint32_t maxMs) {
@@ -145,7 +154,9 @@ bool tunnelTransport(const char* method, const std::string& url, const std::stri
   if (!tailnet::tailnetUrlFor(url, tunnelUrl, direct)) return false;
   if ((!direct && tailnet::atHome()) || !tailnet::configured()) return false;
   status = 0;
-  if (!tailnet::up(tailnet::HOMEBOT_TAILNET_IP, [](const char*) {}, nullptr)) return true;
+  // Only the pull task may be cancelled from outside.
+  const bool* cancel = xTaskGetCurrentTaskHandle() == pullTaskHandle ? &pullCancel : nullptr;
+  if (!tailnet::up(tailnet::HOMEBOT_TAILNET_IP, [](const char*) {}, cancel)) return true;
   LOG_DBG("KOAUTO", "Via Tailscale: %s %s", method, tunnelUrl.c_str());
   tailnet::request(method, tunnelUrl, headers, body, status, response);
   return true;
@@ -176,6 +187,7 @@ void capture(const std::string& epubPath, const std::string& xpath, const float 
 }
 
 void uploadCaptured() {
+  cancelPull();
   waitForPull(15000);
   const bool havePosition = captured.valid;
   const bool haveDiag = diag::pending();

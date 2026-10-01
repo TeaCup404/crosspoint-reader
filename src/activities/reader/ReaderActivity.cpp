@@ -11,6 +11,9 @@
 #include "CrossPointState.h"
 #include "EpubReaderActivity.h"
 #include "ReaderUtils.h"
+#if HOMESYNC
+#include "homesync/KoAuto.h"
+#endif
 #include "RecentBooksStore.h"
 #include "SdCardFontSystem.h"
 #include "XtcReaderActivity.h"
@@ -84,6 +87,11 @@ void ReaderActivity::rememberBookOnceRendered() {
 
 void ReaderActivity::onExit() {
   Activity::onExit();
+#if HOMESYNC
+  // A pull-on-open still running must not tear Wi-Fi down under the next screen.
+  homesync::koauto::cancelPull();
+  homesync::koauto::waitForPull(3000);
+#endif
 
   // Keep rebuildable font buffers from pinning the heap between reading sessions.
   if (auto* fontCache = renderer.getFontCacheManager()) {
