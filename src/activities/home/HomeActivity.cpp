@@ -22,6 +22,8 @@
 #include "MappedInputManager.h"
 #include "OpdsServerStore.h"
 #if HOMESYNC
+#include <HalFrontlight.h>
+
 #include "activities/homesync/HomeSyncActivity.h"
 #include "activities/homesync/ServerDashActivity.h"
 #endif
@@ -30,6 +32,9 @@
 #include "fontIds.h"
 
 int HomeActivity::getMenuItemCount() const {
+#if HOMESYNC
+  if (readingUi) return readingUi->itemCount();
+#endif
   int count = 4;  // File Browser, Library, File transfer, Settings
   if (!recentBooks.empty()) {
     count += recentBooks.size();
@@ -249,6 +254,20 @@ void HomeActivity::onEnter() {
     coverGridUi = makeUniqueNoThrow<CoverGridHomeUi>(renderer);
     if (!coverGridUi) LOG_ERR("HOME", "OOM: cover grid UI; using standard home");
   }
+#if HOMESYNC
+  if (!coverGridUi) {
+    readingUi = makeUniqueNoThrow<ReadingHomeUi>(renderer);
+    if (!readingUi) LOG_ERR("HOME", "OOM: reading home UI; using list home");
+  }
+  if (readingUi) {
+    loadRecentBooks(ReadingHomeUi::MAX_BOOKS);
+    hasContinueReading = !recentBooks.empty();
+    readingUi->begin(recentBooks, hasOpdsServers);
+    selectorIndex = readingUi->indexFor(initialMenuItem);
+    requestUpdate();
+    return;
+  }
+#endif
   loadRecentBooks(coverGridUi ? CoverGridHomeUi::MAX_BOOKS : metrics.homeRecentBooksCount);
   hasContinueReading = !recentBooks.empty();
   if (coverGridUi) {
@@ -268,6 +287,9 @@ void HomeActivity::onExit() {
   Activity::onExit();
 
   coverGridUi.reset();
+#if HOMESYNC
+  readingUi.reset();
+#endif
 
   // Free the stored cover buffer if any
   freeCoverBuffer();
@@ -310,6 +332,12 @@ void HomeActivity::freeCoverBuffer() {
 }
 
 void HomeActivity::loop() {
+#if HOMESYNC
+  if (readingUi) {
+    loopReadingHome();
+    return;
+  }
+#endif
   const int menuCount = getMenuItemCount();
   const auto& metrics = UITheme::getInstance().getMetrics();
 
@@ -474,6 +502,12 @@ void HomeActivity::loop() {
 }
 
 void HomeActivity::render(RenderLock&&) {
+#if HOMESYNC
+  if (readingUi) {
+    renderReadingHome();
+    return;
+  }
+#endif
   const auto& metrics = UITheme::getInstance().getMetrics();
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();
@@ -578,6 +612,95 @@ void HomeActivity::render(RenderLock&&) {
     loadRecentCovers(themeThumbHeight > 0 ? themeThumbHeight : metrics.homeCoverHeight);
   }
 }
+
+#if HOMESYNC
+void HomeActivity::loopReadingHome() {
+  const int touched = readingUi->selectedAction(mappedInput);
+  if (touched >= 0) {
+    selectorIndex = touched;
+    activateReadingItem();
+    return;
+  }
+  // Back resumes the current book, as on the list home.
+  if (mappedInput.wasReleased(MappedInputManager::Button::Back) && !recentBooks.empty()) {
+    onSelectBook(recentBooks[0].path);
+    return;
+  }
+  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
+    activateReadingItem();
+    return;
+  }
+  // One focus walks hero -> recent covers -> tiles (row-major) and wraps;
+  // front Left/Right and the side page buttons both step it.
+  const auto move = [this](const int dir) {
+    selectorIndex = readingUi->step(selectorIndex, dir);
+    requestUpdate();
+  };
+  const auto swipe = mappedInput.wasSwipe();
+  if (swipe == MappedInputManager::SwipeDir::Up) return move(+1);
+  if (swipe == MappedInputManager::SwipeDir::Down) return move(-1);
+  buttonNavigator.onNext([&move] { move(+1); });
+  buttonNavigator.onPrevious([&move] { move(-1); });
+}
+
+void HomeActivity::activateReadingItem() {
+  if (selectorIndex < readingUi->bookCount()) {
+    onSelectBook(recentBooks[selectorIndex].path);
+    return;
+  }
+  if (!readingUi->isEnabled(selectorIndex)) return;
+  switch (readingUi->tileAt(selectorIndex)) {
+    case ReadingHomeUi::TILE_LIBRARY:
+      onLibraryOpen();
+      break;
+    case ReadingHomeUi::TILE_FILES:
+      onFileBrowserOpen();
+      break;
+    case ReadingHomeUi::TILE_STORE:
+      onOpdsBrowserOpen();
+      break;
+    case ReadingHomeUi::TILE_SYNC:
+      if (OPDS_STORE.hasServers()) {
+        activityManager.replaceActivity(
+            std::make_unique<HomeSyncActivity>(renderer, mappedInput, OPDS_STORE.getServers()[0], false));
+      }
+      break;
+    case ReadingHomeUi::TILE_SERVER:
+      activityManager.replaceActivity(std::make_unique<ServerDashActivity>(renderer, mappedInput));
+      break;
+    case ReadingHomeUi::TILE_TRANSFER:
+      onFileTransferOpen();
+      break;
+    case ReadingHomeUi::TILE_SETTINGS:
+      onSettingsOpen();
+      break;
+    case ReadingHomeUi::TILE_LIGHT: {
+      const bool lightOn = !Frontlight.isOn();
+      Frontlight.setOn(lightOn);
+      SETTINGS.frontlightOn = lightOn ? 1 : 0;
+      SETTINGS.saveToFile();
+      requestUpdate();
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+void HomeActivity::renderReadingHome() {
+  renderer.clearScreen();
+  readingUi->setSelection(selectorIndex);
+  readingUi->renderUi();
+  const auto labels = mappedInput.mapLabels(recentBooks.empty() ? "" : tr(STR_RESUME), tr(STR_SELECT),
+                                            tr(STR_DIR_LEFT), tr(STR_DIR_RIGHT));
+  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  renderer.displayBuffer(cleanInitialRefresh && !firstRenderDone ? HalDisplay::HALF_REFRESH : HalDisplay::FAST_REFRESH);
+  firstRenderDone = true;
+  // Missing cover thumbs: one per pass, after the screen is up; each new one
+  // repaints (the next pass makes the next).
+  if (readingUi->generateNextThumb()) requestUpdate();
+}
+#endif
 
 void HomeActivity::onSelectBook(const std::string& path) { activityManager.goToReader(path); }
 

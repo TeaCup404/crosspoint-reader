@@ -1,4 +1,5 @@
 #pragma once
+#include <ctime>
 #include <functional>
 #include <string>
 
@@ -19,6 +20,7 @@
  *     "autoHours": 6,         // auto-sync on wake-to-home if older; 0 = off
  *     "lastSync": 0,          // epoch of the last successful sync
  *     "lastAttempt": 0,       // epoch of the last automatic attempt
+ *     "lastNew": 0,           // books downloaded by the last successful sync
  *     "synced": ["urn:..."] } // OPDS entry ids already pulled
  */
 namespace homesync {
@@ -44,6 +46,28 @@ struct Result {
 };
 
 using ProgressFn = std::function<void(const Progress&)>;
+
+// Current epoch (RTC, else the SNTP-set system clock); 0 when the clock was
+// never set.
+time_t nowEpoch();
+
+// Last successful sync (0 = never/unknown) and how many books it downloaded.
+struct SyncSummary {
+  time_t at = 0;
+  int downloaded = 0;
+};
+SyncSummary lastSyncSummary();
+
+// Last successful Server screen load, cached in /.crosspoint/dash_last.json
+// for the Home status line: {"alarms": n, "ok": n, "at": epoch}.
+struct DashSummary {
+  bool known = false;
+  int alarms = 0;
+  int ok = 0;
+  time_t at = 0;  // 0 = clock unknown at the time
+};
+void saveDashSummary(int alarms, int ok);
+DashSummary loadDashSummary();
 
 // True when auto-sync is on and both the last sync and the last auto attempt
 // are older than autoHours.

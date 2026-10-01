@@ -31,6 +31,7 @@ namespace homesync {
 namespace {
 
 constexpr const char* STATE_FILE = "/.crosspoint/homesync.json";
+constexpr const char* DASH_FILE = "/.crosspoint/dash_last.json";
 constexpr const char* DEFAULT_SHELF = "To Reader";
 constexpr const char* SHELF_INDEX_PATH = "/opds/shelfindex";  // Calibre-Web
 constexpr const char* NEWEST_PATH = "/opds/new";              // Calibre-Web
@@ -52,6 +53,7 @@ struct State {
   int autoHours = DEFAULT_AUTO_HOURS;
   time_t lastSync = 0;
   time_t lastAttempt = 0;
+  int lastNew = 0;
   std::vector<std::string> synced;
 };
 
@@ -67,6 +69,7 @@ State loadState() {
   s.autoHours = doc["autoHours"] | DEFAULT_AUTO_HOURS;
   s.lastSync = static_cast<time_t>(doc["lastSync"] | 0LL);
   s.lastAttempt = static_cast<time_t>(doc["lastAttempt"] | 0LL);
+  s.lastNew = doc["lastNew"] | 0;
   for (JsonVariantConst id : doc["synced"].as<JsonArrayConst>()) {
     const char* v = id | "";
     if (*v) s.synced.emplace_back(v);
@@ -84,6 +87,7 @@ void saveState(const State& s) {
   doc["autoHours"] = s.autoHours;
   doc["lastSync"] = static_cast<long long>(s.lastSync);
   doc["lastAttempt"] = static_cast<long long>(s.lastAttempt);
+  doc["lastNew"] = s.lastNew;
   JsonArray ids = doc["synced"].to<JsonArray>();
   // Keep the newest MAX_REMEMBERED_IDS; older ones are only a re-download risk.
   const size_t start = s.synced.size() > MAX_REMEMBERED_IDS ? s.synced.size() - MAX_REMEMBERED_IDS : 0;
@@ -91,7 +95,7 @@ void saveState(const State& s) {
   PersistableStoreBase::writeDocToFile(STATE_FILE, doc);
 }
 
-time_t nowEpoch() {
+time_t clockEpoch() {
   // RTC chip when the board has one; otherwise the system clock, which keeps
   // running through deep sleep and silent reboots once SNTP has set it.
   time_t e = 0;
@@ -160,11 +164,37 @@ Feed fetch(const OpdsServer& server, const std::string& url) {
 
 bool forceTailnetOnce = false;
 
+time_t nowEpoch() { return clockEpoch(); }
+
+SyncSummary lastSyncSummary() {
+  const State s = loadState();
+  return SyncSummary{s.lastSync, s.lastNew};
+}
+
+void saveDashSummary(const int alarms, const int ok) {
+  JsonDocument doc;
+  doc["alarms"] = alarms;
+  doc["ok"] = ok;
+  doc["at"] = static_cast<long long>(clockEpoch());
+  PersistableStoreBase::writeDocToFile(DASH_FILE, doc);
+}
+
+DashSummary loadDashSummary() {
+  DashSummary d;
+  JsonDocument doc;
+  if (!PersistableStoreBase::readDocFromFile(DASH_FILE, doc)) return d;
+  d.known = true;
+  d.alarms = doc["alarms"] | 0;
+  d.ok = doc["ok"] | 0;
+  d.at = static_cast<time_t>(doc["at"] | 0LL);
+  return d;
+}
+
 bool autoSyncDue() {
   if (!OPDS_STORE.hasServers()) return false;
   const State s = loadState();
   if (s.autoHours <= 0) return false;
-  const time_t now = nowEpoch();
+  const time_t now = clockEpoch();
   // Unknown clock: no auto-sync (it would run on every wake). A manual sync
   // sets the clock, after which auto-sync works.
   if (now == 0) return false;
@@ -174,7 +204,7 @@ bool autoSyncDue() {
 
 void noteAutoAttempt() {
   State s = loadState();
-  const time_t now = nowEpoch();
+  const time_t now = clockEpoch();
   if (now == 0) return;
   s.lastAttempt = now;
   saveState(s);
@@ -348,8 +378,9 @@ Result run(const OpdsServer& server, const std::function<void(const char*)>& sta
   const bool cancelled = cancel && *cancel;
   result.ok = result.error.empty() && !cancelled;
   if (result.ok) {
-    const time_t now = nowEpoch();
+    const time_t now = clockEpoch();
     if (now) state.lastSync = now;
+    state.lastNew = result.downloaded;
   }
   saveState(state);
   LOG_INF("SYNC", "Done: %d new, %d already here, %d failed", result.downloaded, result.alreadyHere,

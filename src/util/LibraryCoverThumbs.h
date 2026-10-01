@@ -19,14 +19,15 @@ constexpr int COVER_WIDTH = COVER_HEIGHT * 2 / 3;
 // so the centered art never exposes a slot edge after its rightward nudge.
 constexpr int THUMB_HEIGHT = COVER_HEIGHT + 8;
 
-// Thumb path for a book at THUMB_HEIGHT; empty for formats without covers.
-// Only derives the cache path, no parsing.
-std::string thumbPathFor(const std::string& bookPath);
+// Thumb path for a book at THUMB_HEIGHT (or another generation height, e.g.
+// the Home recent strip); empty for formats without covers. Only derives the
+// cache path, no parsing.
+std::string thumbPathFor(const std::string& bookPath, int thumbHeight = THUMB_HEIGHT);
 
 // Generates the book's thumb when it is missing. Blocking (one book, typically
 // well under a second); true when the thumb exists afterwards. Not every book
 // has a cover, so false is an ordinary outcome.
-bool generateThumb(const std::string& bookPath);
+bool generateThumb(const std::string& bookPath, int thumbHeight = THUMB_HEIGHT);
 
 // Thumb generation decodes JPEG/PNG covers; skip it when memory is tight
 // rather than risk the caller's own work.

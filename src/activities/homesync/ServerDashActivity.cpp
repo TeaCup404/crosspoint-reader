@@ -17,6 +17,7 @@
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/UITheme.h"
 #include "homesync/Diag.h"
+#include "homesync/HomeSync.h"
 #include "homesync/Tailnet.h"
 #include "network/HttpDownloader.h"
 
@@ -121,6 +122,7 @@ void ServerDashActivity::load() {
     requestUpdate(true);
     return;
   }
+  homesync::saveDashSummary(static_cast<int>(checks.size()), okCount);  // Home status line
   char buf[8] = "";
   if (halClock.formatTime(buf, sizeof(buf), false)) {
     fetchedAt = buf;

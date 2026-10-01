@@ -17,16 +17,16 @@ constexpr size_t MIN_INTERNAL_FREE = 32 * 1024;
 constexpr size_t MIN_LARGEST_BLOCK = 48 * 1024;
 }  // namespace
 
-std::string thumbPathFor(const std::string& bookPath) {
+std::string thumbPathFor(const std::string& bookPath, const int thumbHeight) {
   // Constructors only derive cache paths; keep the large parser objects off
   // the task stack all the same.
   if (FsHelpers::hasReflowableBookExtension(bookPath)) {
     auto epub = makeUniqueNoThrow<Epub>(bookPath, "/.crosspoint");
-    return epub ? epub->getThumbBmpPath(THUMB_HEIGHT) : std::string();
+    return epub ? epub->getThumbBmpPath(thumbHeight) : std::string();
   }
   if (FsHelpers::hasXtcExtension(bookPath)) {
     auto xtc = makeUniqueNoThrow<Xtc>(bookPath, "/.crosspoint");
-    return xtc ? xtc->getThumbBmpPath(THUMB_HEIGHT) : std::string();
+    return xtc ? xtc->getThumbBmpPath(thumbHeight) : std::string();
   }
   return {};
 }
@@ -34,14 +34,14 @@ std::string thumbPathFor(const std::string& bookPath) {
 // Same generation paths as the Home cover grid (HomeActivity::loadGridCover):
 // EPUB/TXT locate the cover without building spine or TOC caches; XTC needs its
 // header loaded first.
-bool generateThumb(const std::string& bookPath) {
+bool generateThumb(const std::string& bookPath, const int thumbHeight) {
   if (FsHelpers::hasReflowableBookExtension(bookPath)) {
     auto epub = makeUniqueNoThrow<Epub>(bookPath, "/.crosspoint");
     if (!epub) {
       LOG_ERR("COVR", "OOM: cover EPUB");
       return false;
     }
-    return epub->generateThumbBmpFromSource(THUMB_HEIGHT);
+    return epub->generateThumbBmpFromSource(thumbHeight);
   }
   if (FsHelpers::hasXtcExtension(bookPath)) {
     auto xtc = makeUniqueNoThrow<Xtc>(bookPath, "/.crosspoint");
@@ -49,8 +49,8 @@ bool generateThumb(const std::string& bookPath) {
       LOG_ERR("COVR", "OOM: cover XTC");
       return false;
     }
-    if (Storage.exists(xtc->getThumbBmpPath(THUMB_HEIGHT).c_str())) return true;
-    return xtc->load() && xtc->generateThumbBmp(THUMB_HEIGHT);
+    if (Storage.exists(xtc->getThumbBmpPath(thumbHeight).c_str())) return true;
+    return xtc->load() && xtc->generateThumbBmp(thumbHeight);
   }
   return false;
 }

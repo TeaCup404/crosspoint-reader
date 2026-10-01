@@ -6,12 +6,22 @@
 #include "RecentBooksStore.h"
 #include "activities/Activity.h"
 #include "components/CoverGridHomeUi.h"
+#if HOMESYNC
+#include "components/ReadingHomeUi.h"
+#endif
 #include "util/ButtonNavigator.h"
 
 struct Rect;
 
 class HomeActivity final : public Activity {
   std::unique_ptr<CoverGridHomeUi> coverGridUi;
+#if HOMESYNC
+  // Replaces the list home for every theme but the cover grid.
+  std::unique_ptr<ReadingHomeUi> readingUi;
+  void loopReadingHome();
+  void activateReadingItem();
+  void renderReadingHome();
+#endif
   ButtonNavigator buttonNavigator;
   int selectorIndex = 0;
   bool recentsLoading = false;
