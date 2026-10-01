@@ -49,7 +49,8 @@ const char* matchMethodName(const DocumentMatchMethod method) {
 
 KOReaderSyncActivity::KOReaderSyncActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
                                            const std::string& epubPath, CrossPointPosition localPosition,
-                                           SavedProgressPosition localKoPos, std::string localChapterName)
+                                           SavedProgressPosition localKoPos, std::string localChapterName,
+                                           const bool autoPull)
     : Activity("KOReaderSync", renderer, mappedInput),
       UiAppHost(renderer),
       epubPath(epubPath),
@@ -57,7 +58,8 @@ KOReaderSyncActivity::KOReaderSyncActivity(GfxRenderer& renderer, MappedInputMan
       localPosition(localPosition),
       remoteProgress{},
       remotePosition{},
-      localProgress(std::move(localKoPos)) {}
+      localProgress(std::move(localKoPos)),
+      autoPull(autoPull) {}
 
 void KOReaderSyncActivity::ensureEpubLoaded() {
   if (!epub) {
@@ -97,7 +99,7 @@ void KOReaderSyncActivity::saveProgressAndReturn(int spineIndex, int page) {
 void KOReaderSyncActivity::returnToReader() { activityManager.goToReader(epubPath); }
 
 bool KOReaderSyncActivity::smartSyncEnabled() const {
-  return KOREADER_STORE.getSyncBehavior() == KOReaderSyncBehavior::SMART;
+  return autoPull || KOREADER_STORE.getSyncBehavior() == KOReaderSyncBehavior::SMART;
 }
 
 void KOReaderSyncActivity::markAutoReturn() { autoReturnAt = millis() + AUTO_RETURN_DELAY_MS; }

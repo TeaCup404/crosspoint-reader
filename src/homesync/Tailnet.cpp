@@ -340,6 +340,68 @@ bool getImpl(std::string url, const std::string& user, const std::string& passwo
   return false;
 }
 
+// One request without redirects; any status is returned, body capped at maxBody.
+bool requestImpl(const char* method, const std::string& url, const std::string& headers, const std::string& body,
+                 int& status, std::string& response, const size_t maxBody) {
+  status = 0;
+  response.clear();
+  Url u;
+  if (!parseUrl(url, u)) {
+    LOG_ERR("TSN", "Unsupported URL: %s", url.c_str());
+    return false;
+  }
+  auto conn = std::make_unique<Conn>();
+  if (!conn->open(u.host, u.port, u.tls)) return false;
+  const bool defaultPort = u.port == (u.tls ? 443 : 80);
+  const std::string host = defaultPort ? u.host : u.host + ":" + std::to_string(u.port);
+  std::string req = std::string(method) + " " + u.path + " HTTP/1.1\r\nHost: " + host +
+                    "\r\nUser-Agent: CrossPoint-homesync\r\nAccept-Encoding: identity\r\nConnection: close\r\n" +
+                    headers;
+  if (!body.empty() || strcmp(method, "GET") != 0) req += "Content-Length: " + std::to_string(body.size()) + "\r\n";
+  req += "\r\n";
+  if (!conn->writeAll(req.data(), req.size()) || (!body.empty() && !conn->writeAll(body.data(), body.size()))) {
+    return false;
+  }
+
+  auto reader = std::make_unique<Reader>(*conn);
+  std::string lineText;
+  if (!reader->line(lineText) || lineText.size() < 12) return false;
+  status = atoi(lineText.c_str() + 9);
+  long contentLength = -1;
+  bool chunked = false;
+  while (reader->line(lineText) && !lineText.empty()) {
+    const size_t colon = lineText.find(':');
+    if (colon == std::string::npos) continue;
+    std::string name = lineText.substr(0, colon);
+    std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) { return tolower(c); });
+    size_t v = colon + 1;
+    while (v < lineText.size() && lineText[v] == ' ') ++v;
+    if (name == "content-length") contentLength = atol(lineText.c_str() + v);
+    if (name == "transfer-encoding" && lineText.find("chunked", v) != std::string::npos) chunked = true;
+  }
+  uint8_t chunk[512];
+  const auto pump = [&](long remaining) -> bool {  // remaining < 0 = until close
+    while (remaining != 0) {
+      const size_t want = remaining < 0 ? sizeof(chunk) : std::min<size_t>(sizeof(chunk), remaining);
+      const int n = reader->some(chunk, want);
+      if (n == 0) return remaining < 0;
+      if (n < 0) return false;
+      if (response.size() < maxBody) {
+        response.append(reinterpret_cast<const char*>(chunk), std::min<size_t>(n, maxBody - response.size()));
+      }
+      if (remaining > 0) remaining -= n;
+    }
+    return true;
+  };
+  if (!chunked) return pump(contentLength);
+  while (true) {
+    if (!reader->line(lineText)) return false;
+    const long size = strtol(lineText.c_str(), nullptr, 16);
+    if (size == 0) return true;
+    if (!pump(size) || !reader->line(lineText)) return false;
+  }
+}
+
 }  // namespace
 
 bool saveAuthKey(const std::string& key) {
@@ -433,6 +495,13 @@ bool get(const std::string& url, const std::string& user, const std::string& pas
   if (!isUp()) return false;
   LOG_DBG("TSN", "GET %s", url.c_str());
   return getImpl(url, user, password, onData, onTotal, cancel);
+}
+
+bool request(const char* method, const std::string& url, const std::string& headers, const std::string& body,
+             int& status, std::string& response, const size_t maxBody) {
+  if (!isUp()) return false;
+  LOG_DBG("TSN", "%s %s", method, url.c_str());
+  return requestImpl(method, url, headers, body, status, response, maxBody);
 }
 
 void down() {

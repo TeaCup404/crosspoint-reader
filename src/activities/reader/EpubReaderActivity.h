@@ -164,9 +164,11 @@ class EpubReaderActivity final : public ReaderActivity {
   void activateMoreRow(int row);
   void openFootnoteSelect(bool reopenMenuOnCancel);
   void openDictionaryWordSelect();
-  bool launchKOReaderSync();
+  bool launchKOReaderSync(bool autoPull = false);
   void launchRecap();
   bool buildErrorRecorded = false;
+  bool pullStarted = false;
+  void pollKoPull();
 
  public:
   void beforeSleep() override;

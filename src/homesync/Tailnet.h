@@ -47,6 +47,10 @@ extern bool forceAway;
 bool get(const std::string& url, const std::string& user, const std::string& password,
          const std::function<bool(const uint8_t*, size_t)>& onData, const std::function<void(size_t)>& onTotal,
          bool* cancel);
+// One request over the tunnel (no redirects). `headers` is raw "Name: value\r\n"
+// lines; any HTTP status is reported, the body is kept up to maxBody bytes.
+bool request(const char* method, const std::string& url, const std::string& headers, const std::string& body,
+             int& status, std::string& response, size_t maxBody = 4096);
 constexpr const char* HOMEBOT_TAILNET_IP = "100.86.140.113";
 
 bool fetch(const std::string& url, const HttpDownloader::DataCallback& onData, const std::string& user,

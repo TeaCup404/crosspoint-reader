@@ -14,6 +14,7 @@ import json
 import os
 import re
 import socket
+import sqlite3
 import threading
 import time
 import urllib.parse
@@ -36,6 +37,35 @@ STATS_URL = os.environ.get("READER_HUB_STATS", "http://127.0.0.1:8787/api/stats"
 # Stopped on purpose (Hermes was shut down 2026-09-26); not alarms.
 IGNORE = {"WhatsApp bridge", "hermes-gateway"}
 OK, WARN, CRIT = 0, 1, 2
+
+# ---- KOReader document id -> library book ----
+# CWA ties kosync progress to a book through metadata.db's book_format_checksums
+# (then shows it on the book page and sets read status). The reader's copy is a
+# CWA export with embedded metadata, so its partial-MD5 never matches the
+# library file; the reader sends its id with the title/author once, and the
+# row is added here.
+DOC_ID = re.compile(r"^[0-9a-f]{32}$")
+
+
+def kolink(doc, title, author):
+    if not DOC_ID.match(doc):
+        return {"linked": False, "reason": "bad document id"}
+    book = recap.find_book(title, author)
+    if not book:
+        return {"linked": False, "reason": "not in library"}
+    db = sqlite3.connect(os.path.join(recap.LIBRARY, "metadata.db"), timeout=10)
+    try:
+        if not db.execute("SELECT 1 FROM sqlite_master WHERE name='book_format_checksums'").fetchone():
+            return {"linked": False, "reason": "CWA checksum table missing (restart CWA with KOReader sync on)"}
+        if not db.execute("SELECT 1 FROM book_format_checksums WHERE checksum=?", (doc,)).fetchone():
+            with db:
+                db.execute("INSERT INTO book_format_checksums (book, format, checksum, version) "
+                           "VALUES (?, 'EPUB', ?, 'koreader')", (book["id"], doc))
+            print(f"kolink {doc} -> {book['id']} {book['title']}", flush=True)
+    finally:
+        db.close()
+    return {"linked": True, "book": book["id"], "title": book["title"]}
+
 
 
 def gib(n):
@@ -159,6 +189,13 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 code, body = 200, {"status": "error", "message": str(e)[:200]}
             self.send_bytes(code, json.dumps(body, ensure_ascii=False).encode(), "application/json; charset=utf-8")
+        elif path == "/kolink":
+            q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+            try:
+                body = kolink(q.get("doc", [""])[0].lower(), q.get("title", [""])[0], q.get("author", [""])[0])
+            except Exception as e:
+                body = {"linked": False, "reason": str(e)[:200]}
+            self.send_bytes(200, json.dumps(body).encode(), "application/json")
         elif path == "/ota/latest.json":
             self.latest()
         elif path.startswith("/ota/") and SAFE_NAME.match(path[5:]):

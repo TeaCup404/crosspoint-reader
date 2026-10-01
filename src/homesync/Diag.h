@@ -19,4 +19,7 @@ bool pending();
 // Tailscale when away). Sent reports are deleted.
 void flush();
 
+// Percent-encodes everything but unreserved characters (query values).
+std::string urlEncode(const std::string& s);
+
 }  // namespace homesync::diag

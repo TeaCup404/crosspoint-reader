@@ -107,4 +107,11 @@ class KOReaderSyncClient {
 
   /** HTTP status code from the last request (for diagnostics). */
   static int lastHttpCode;
+
+  // Optional route for builds that reach the server another way (the homesync
+  // build tunnels home URLs over Tailscale when away). Returns false to let the
+  // request go direct; otherwise sets the HTTP status (<= 0 on failure) and body.
+  using Transport = bool (*)(const char* method, const std::string& url, const std::string& headers,
+                             const std::string& body, int& status, std::string& response);
+  static Transport transport;
 };

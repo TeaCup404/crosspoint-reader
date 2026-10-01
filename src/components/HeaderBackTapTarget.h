@@ -23,5 +23,11 @@ inline void set(const int newX, const int newY, const int newW, const int newH) 
 
 inline void clear() { w = 0; }
 
-inline bool contains(const int tx, const int ty) { return w > 0 && tx >= x && tx < x + w && ty >= y && ty < y + h; }
+// Finger slop around the drawn button: a near miss would otherwise land on the
+// status band beside it, which opens the light panel.
+inline constexpr int SLOP = 28;
+
+inline bool contains(const int tx, const int ty) {
+  return w > 0 && tx >= x - SLOP && tx < x + w + SLOP && ty >= y - SLOP && ty < y + h + SLOP;
+}
 }  // namespace HeaderBackTapTarget

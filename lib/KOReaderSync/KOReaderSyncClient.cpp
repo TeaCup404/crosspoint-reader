@@ -6,6 +6,7 @@
 #include <SecureHttpClient.h>
 #include <base64.h>
 
+#include <cstring>
 #include <string>
 
 #include "KOReaderCredentialStore.h"
@@ -46,7 +47,48 @@ bool insufficientHeap() {
   }
   return false;
 }
+
+std::string authHeaderLines() {
+  const std::string credentials = KOREADER_STORE.getUsername() + ":" + KOREADER_STORE.getPassword();
+  const String encoded = base64::encode(credentials.c_str());
+  return "Accept: application/vnd.koreader.v1+json\r\nx-auth-user: " + KOREADER_STORE.getUsername() +
+         "\r\nx-auth-key: " + KOREADER_STORE.getMd5Password() + "\r\nAuthorization: Basic " + encoded.c_str() +
+         "\r\n";
+}
+
+// One request: through the transport hook when it takes the URL, else direct.
+// Returns the HTTP status (<= 0 on network failure); response gets the body.
+int exchange(const char* method, const std::string& url, const std::string& body, const bool auth,
+             std::string* response) {
+  std::string headers = auth ? authHeaderLines() : "Accept: application/vnd.koreader.v1+json\r\n";
+  if (!body.empty()) headers += "Content-Type: application/json\r\n";
+  int status = 0;
+  std::string received;
+  if (KOReaderSyncClient::transport && KOReaderSyncClient::transport(method, url, headers, body, status, received)) {
+    if (response) *response = std::move(received);
+    return status;
+  }
+
+  freeink::SecureHttpClient http;
+  http.setInsecure();
+  if (!http.begin(url)) {
+    LOG_ERR("KOSync", "Bad URL: %s", url.c_str());
+    return 0;
+  }
+  if (auth) {
+    applyAuthHeaders(http);
+  } else {
+    http.addHeader("Accept", "application/vnd.koreader.v1+json");
+  }
+  if (!body.empty()) http.addHeader("Content-Type", "application/json");
+  const int httpCode = strcmp(method, "GET") == 0 ? http.GET() : http.sendRequest(method, body);
+  if (response && httpCode > 0) *response = http.getString().c_str();
+  http.end();
+  return httpCode;
+}
 }  // namespace
+
+KOReaderSyncClient::Transport KOReaderSyncClient::transport = nullptr;
 
 KOReaderSyncClient::Error KOReaderSyncClient::authenticate() {
   lastHttpCode = 0;
@@ -59,15 +101,7 @@ KOReaderSyncClient::Error KOReaderSyncClient::authenticate() {
   LOG_DBG("KOSync", "Authenticating: %s (heap: %u)", url.c_str(), (unsigned)ESP.getFreeHeap());
   if (insufficientHeap()) return LOW_MEMORY;
 
-  freeink::SecureHttpClient http;
-  http.setInsecure();
-  if (!http.begin(url)) {
-    LOG_ERR("KOSync", "Bad URL: %s", url.c_str());
-    return NETWORK_ERROR;
-  }
-  applyAuthHeaders(http);
-  const int httpCode = http.GET();
-  http.end();
+  const int httpCode = exchange("GET", url, "", true, nullptr);
   lastHttpCode = httpCode;
 
   LOG_DBG("KOSync", "Auth response: %d", httpCode);
@@ -98,16 +132,7 @@ KOReaderSyncClient::Error KOReaderSyncClient::createUser() {
   std::string body;
   serializeJson(doc, body);
 
-  freeink::SecureHttpClient http;
-  http.setInsecure();
-  if (!http.begin(url)) {
-    LOG_ERR("KOSync", "Bad URL: %s", url.c_str());
-    return NETWORK_ERROR;
-  }
-  http.addHeader("Accept", "application/vnd.koreader.v1+json");
-  http.addHeader("Content-Type", "application/json");
-  const int httpCode = http.sendRequest("POST", body);
-  http.end();
+  const int httpCode = exchange("POST", url, body, false, nullptr);
   lastHttpCode = httpCode;
 
   LOG_DBG("KOSync", "Create user response: %d", httpCode);
@@ -130,36 +155,23 @@ KOReaderSyncClient::Error KOReaderSyncClient::getProgress(const std::string& doc
   LOG_DBG("KOSync", "Getting progress: %s (heap: %u)", url.c_str(), (unsigned)ESP.getFreeHeap());
   if (insufficientHeap()) return LOW_MEMORY;
 
-  freeink::SecureHttpClient http;
-  http.setInsecure();
-  if (!http.begin(url)) {
-    LOG_ERR("KOSync", "Bad URL: %s", url.c_str());
-    return NETWORK_ERROR;
-  }
-  applyAuthHeaders(http);
-  const int httpCode = http.GET();
+  std::string response;
+  const int httpCode = exchange("GET", url, "", true, &response);
   lastHttpCode = httpCode;
 
   LOG_DBG("KOSync", "Get progress response: %d", httpCode);
 
-  if (httpCode <= 0) {
-    http.end();
-    return NETWORK_ERROR;
-  }
+  if (httpCode <= 0) return NETWORK_ERROR;
 
   // 204 = success with no stored progress for this document (Spring-style
   // KOSync implementations; the reference server answers 200 with an empty
   // object instead). Map it to the same graceful no-remote-progress path as
   // 404 rather than falling through to SERVER_ERROR — see issue #2876.
-  if (httpCode == 204) {
-    http.end();
-    return NOT_FOUND;
-  }
+  if (httpCode == 204) return NOT_FOUND;
 
   if (httpCode >= 200 && httpCode < 300) {
     JsonDocument doc;
-    const DeserializationError error = deserializeJson(doc, http.getString().c_str());
-    http.end();
+    const DeserializationError error = deserializeJson(doc, response);
 
     if (error) {
       LOG_ERR("KOSync", "JSON parse failed: %s", error.c_str());
@@ -196,7 +208,6 @@ KOReaderSyncClient::Error KOReaderSyncClient::getProgress(const std::string& doc
     return OK;
   }
 
-  http.end();
   if (httpCode == 401) return AUTH_FAILED;
   if (httpCode == 404) return NOT_FOUND;
   return SERVER_ERROR;
@@ -244,16 +255,7 @@ KOReaderSyncClient::Error KOReaderSyncClient::updateProgress(const KOReaderProgr
 
   LOG_DBG("KOSync", "Request body: %s", body.c_str());
 
-  freeink::SecureHttpClient http;
-  http.setInsecure();
-  if (!http.begin(url)) {
-    LOG_ERR("KOSync", "Bad URL: %s", url.c_str());
-    return NETWORK_ERROR;
-  }
-  applyAuthHeaders(http);
-  http.addHeader("Content-Type", "application/json");
-  const int httpCode = http.sendRequest("PUT", body);
-  http.end();
+  const int httpCode = exchange("PUT", url, body, true, nullptr);
   lastHttpCode = httpCode;
 
   LOG_DBG("KOSync", "Update progress response: %d", httpCode);

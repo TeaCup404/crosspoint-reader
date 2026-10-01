@@ -72,7 +72,8 @@ class ReadingHomeUi final : public UiAppHost {
   void drawTile(UiScreen& screen, freeink::ui::Rect rect, Tile tile, int index);
   void drawCover(freeink::ui::DrawTarget& target, freeink::ui::Rect rect, int book);
   void buildStatusLine();
-  static int thumbHeight(int book);
+  int16_t heroCoverHeight() const;
+  int thumbHeight(int book) const;
 
   HomeCoverCache coverCache;
   GfxRenderer& renderer;

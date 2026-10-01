@@ -9,14 +9,6 @@
 #include "network/HttpDownloader.h"
 
 namespace homesync::diag {
-namespace {
-
-constexpr const char* DIAG_FILE = "/.crosspoint/diag.txt";
-constexpr const char* CRASH_FILE = "/crash_report.txt";
-constexpr const char* CRASH_SENT = "/.crosspoint/crash_sent";  // size of the last crash report sent
-constexpr const char* DIAG_URL = "http://192.168.1.124:8790/diag";  // reader-hub; routed via Tailscale when away
-constexpr size_t MAX_FILE = 6000;
-constexpr size_t PIECE = 1200;  // characters per request (URL-encoded, so up to ~3.6 KB)
 
 std::string urlEncode(const std::string& s) {
   std::string out;
@@ -32,6 +24,15 @@ std::string urlEncode(const std::string& s) {
   }
   return out;
 }
+
+namespace {
+
+constexpr const char* DIAG_FILE = "/.crosspoint/diag.txt";
+constexpr const char* CRASH_FILE = "/crash_report.txt";
+constexpr const char* CRASH_SENT = "/.crosspoint/crash_sent";  // size of the last crash report sent
+constexpr const char* DIAG_URL = "http://192.168.1.124:8790/diag";  // reader-hub; routed via Tailscale when away
+constexpr size_t MAX_FILE = 6000;
+constexpr size_t PIECE = 1200;  // characters per request (URL-encoded, so up to ~3.6 KB)
 
 std::string readAll(const char* path, size_t limit) {
   std::string out;

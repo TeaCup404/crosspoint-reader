@@ -381,6 +381,9 @@ void EpubReaderActivity::loop() {
   }
 
   rememberBookOnceRendered();
+#if HOMESYNC
+  pollKoPull();
+#endif
 
   // Someone else turned the screen while this reader was stacked (the control
   // center's orientation tile). Reflow before the next render, or the page
@@ -971,7 +974,30 @@ unsigned long EpubReaderActivity::confirmLongPressThreshold() const {
   }
 }
 
-bool EpubReaderActivity::launchKOReaderSync() {
+#if HOMESYNC
+void EpubReaderActivity::pollKoPull() {
+  if (!pullStarted) {
+    // After the first page is on screen, so opening a book never waits on Wi-Fi.
+    if (lastRenderCompleteMs == 0 || !homesync::koauto::wanted()) return;
+    pullStarted = true;
+    RenderLock renderLock;
+    SavedProgressPosition koPos;
+    {
+      GfxRenderer::FrameBufferLoan loan(renderer);
+      koPos = ProgressMapper::toSavedProgress(epub, getCurrentPosition());
+    }
+    homesync::koauto::startPull(epub->getPath(), koPos.percentage);
+    return;
+  }
+  if (homesync::koauto::pullResult() != homesync::koauto::PullResult::RemoteAhead) return;
+  homesync::koauto::clearPull();
+  launchKOReaderSync(true);
+}
+#else
+void EpubReaderActivity::pollKoPull() {}
+#endif
+
+bool EpubReaderActivity::launchKOReaderSync(const bool autoPull) {
   if (!KOREADER_STORE.hasCredentials()) return false;
 
   RenderLock renderLock;
@@ -1013,8 +1039,9 @@ bool EpubReaderActivity::launchKOReaderSync() {
   }
   LOG_DBG("KOSync", "Epub released (heap after: %u)", (unsigned)ESP.getFreeHeap());
 
-  activityManager.replaceActivity(std::make_unique<KOReaderSyncActivity>(
-      renderer, mappedInput, savedEpubPath, localPos, std::move(localKoPos), std::move(localChapterName)));
+  activityManager.replaceActivity(std::make_unique<KOReaderSyncActivity>(renderer, mappedInput, savedEpubPath,
+                                                                         localPos, std::move(localKoPos),
+                                                                         std::move(localChapterName), autoPull));
   return true;
 }
 
@@ -1049,7 +1076,7 @@ void EpubReaderActivity::beforeSleep() {
     GfxRenderer::FrameBufferLoan loan(renderer);
     koPos = ProgressMapper::toSavedProgress(epub, localPos);
   }
-  homesync::koauto::capture(epub->getPath(), koPos.xpath, koPos.percentage);
+  homesync::koauto::capture(epub->getPath(), koPos.xpath, koPos.percentage, epub->getTitle(), epub->getAuthor());
 #endif
 }
 

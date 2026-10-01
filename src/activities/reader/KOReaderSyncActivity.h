@@ -24,7 +24,7 @@ class KOReaderSyncActivity final : public Activity, private UiAppHost {
  public:
   explicit KOReaderSyncActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, const std::string& epubPath,
                                 CrossPointPosition localPosition, SavedProgressPosition localKoPos,
-                                std::string localChapterName);
+                                std::string localChapterName, bool autoPull = false);
 
   void onEnter() override;
   void onExit() override;
@@ -62,6 +62,9 @@ class KOReaderSyncActivity final : public Activity, private UiAppHost {
 
   // Local progress as KOReader format (pre-computed before Epub was released)
   SavedProgressPosition localProgress;
+
+  // Started by the reader's pull-on-open: always the smart (no-prompt) flow.
+  bool autoPull = false;
 
   // Selection in result screen (0=Apply, 1=Upload)
   int selectedOption = 0;

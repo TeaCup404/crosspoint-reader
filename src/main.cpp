@@ -41,6 +41,7 @@
 #include "activities/homesync/RecapActivity.h"
 #include "homesync/HomeSync.h"
 #include "homesync/KoAuto.h"
+#include "KOReaderSyncClient.h"
 #include "homesync/QuietWifi.h"
 #include "network/OtaUpdater.h"
 #include "homesync/Tailnet.h"
@@ -368,6 +369,9 @@ void setupDisplayAndFonts(bool seamless = false) {
 
 void setup() {
   BoardConfig::holdPowerRails();
+#if HOMESYNC
+  KOReaderSyncClient::transport = homesync::koauto::tunnelTransport;
+#endif
 
 #ifdef ENABLE_SERIAL_LOG
 #ifdef CROSSPOINT_WAIT_FOR_USB_SERIAL
@@ -394,6 +398,11 @@ void setup() {
   const bool silentRebootLightOn = isSilentReboot && (silentRebootPayload & SILENT_REBOOT_LIGHT_ON) != 0;
   silentRebootMagic = 0;
   silentRebootTarget = 0;
+#if HOMESYNC
+  // Back from a Wi-Fi session (often the KOReader sync itself): the position
+  // is fresh, don't check the server again for this book.
+  if (snapshotTarget == SILENT_REBOOT_TARGET_READER) homesync::koauto::skipPullOnce();
+#endif
   silentRebootPayload = 0;
 
   gpio.begin();

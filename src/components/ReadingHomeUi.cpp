@@ -33,9 +33,10 @@ namespace fui = freeink::ui;
 
 namespace {
 constexpr fui::ActionId SELECT = 1;
-// Hero: the Library's cover size, so its thumb is usually there already.
+// Hero: the Library's cover size on short (landscape) screens, so its thumb is
+// usually there already; portrait has the height for a larger one.
 constexpr int16_t COVER_H = library_covers::COVER_HEIGHT;
-constexpr int16_t COVER_W = library_covers::COVER_WIDTH;
+constexpr int16_t TALL_COVER_H = 240;
 // Recent strip: smaller, so four fit with air between them. Thumbs are made
 // at exactly this slot (+8 bleed, as for the Library): never rescaled.
 constexpr int16_t STRIP_H = 136;
@@ -47,7 +48,7 @@ constexpr int16_t RING_W = 3;
 constexpr int16_t RING = RING_GAP + RING_W;
 constexpr int16_t HERO_PAD = 6;
 constexpr int16_t ICON = 32;
-constexpr int16_t TILE_MAX_H = 104;
+constexpr int16_t TILE_MAX_H = 160;
 constexpr uint8_t RADIUS = 8;
 
 struct TileInfo {
@@ -105,7 +106,13 @@ void ReadingHomeUi::begin(const std::vector<RecentBook>& recent, const bool opds
   buildStatusLine();
 }
 
-int ReadingHomeUi::thumbHeight(const int book) { return book == 0 ? library_covers::THUMB_HEIGHT : STRIP_THUMB_H; }
+int16_t ReadingHomeUi::heroCoverHeight() const {
+  return renderer.getScreenHeight() > renderer.getScreenWidth() ? TALL_COVER_H : COVER_H;
+}
+
+int ReadingHomeUi::thumbHeight(const int book) const {
+  return book == 0 ? heroCoverHeight() + (library_covers::THUMB_HEIGHT - COVER_H) : STRIP_THUMB_H;
+}
 
 int ReadingHomeUi::bookCount() const {
   return books ? std::min(static_cast<int>(books->size()), static_cast<int>(MAX_BOOKS)) : 0;
@@ -259,7 +266,7 @@ void ReadingHomeUi::draw(UiScreen& screen) {
     target.text(rect, statusLine.c_str(), status);
   }
 
-  const auto hero = screen.takeTop(static_cast<int16_t>(COVER_H + 2 * HERO_PAD), theme.spaceLg);
+  const auto hero = screen.takeTop(static_cast<int16_t>(heroCoverHeight() + 2 * HERO_PAD), theme.spaceLg);
   if (bookCount() > 0) {
     drawHero(screen, hero);
   } else {
@@ -306,7 +313,8 @@ void ReadingHomeUi::drawHero(UiScreen& screen, fui::Rect rect) {
   card.padding = fui::Insets{HERO_PAD, HERO_PAD, HERO_PAD, HERO_PAD};
   card.gap = theme.spaceLg;
   card.centerTextOnCover = true;
-  card.coverSize = fui::Size{COVER_W, COVER_H};
+  const int16_t coverH = heroCoverHeight();
+  card.coverSize = fui::Size{static_cast<int16_t>(coverH * 2 / 3), coverH};
   card.coverPainterUserData = this;
   card.coverPainter = [](fui::DrawTarget& target, fui::Rect cover, const fui::BookCardProps&, void* user) {
     static_cast<ReadingHomeUi*>(user)->drawCover(target, cover, 0);
