@@ -83,9 +83,20 @@ size_t countUtf8Codepoints(const XML_Char* data, const int len) {
 // has unclosed void tags (`<meta charset="utf-8">`) would otherwise fail to
 // parse here too, and progress mapping for them would always fail.
 XML_Status parseRepaired(XML_Parser parser, VoidTagRepair& repair, const char* data, size_t len, bool final) {
-  std::vector<char> out(len + VoidTagRepair::maxGrowth(len));
-  const size_t n = repair.process(data, len, out.data(), final);
-  return XML_Parse(parser, out.data(), static_cast<int>(n), final ? XML_TRUE : XML_FALSE);
+  // Fixed stack buffer, fed in slices: no per-write heap allocation.
+  constexpr size_t SLICE = 256;
+  char out[SLICE + VoidTagRepair::maxGrowth(SLICE)];
+  size_t off = 0;
+  do {
+    const size_t take = std::min(SLICE, len - off);
+    const bool last = final && off + take == len;
+    const size_t n = repair.process(data + off, take, out, last);
+    if (XML_Parse(parser, out, static_cast<int>(n), last ? XML_TRUE : XML_FALSE) == XML_STATUS_ERROR) {
+      return XML_STATUS_ERROR;
+    }
+    off += take;
+  } while (off < len);
+  return XML_STATUS_OK;
 }
 
 class ParagraphTextCounter final : public Print {
