@@ -42,6 +42,7 @@
 #include "homesync/HomeSync.h"
 #include "homesync/KoAuto.h"
 #include "homesync/AutoLight.h"
+#include "homesync/Nightly.h"
 #include "homesync/WifiLinger.h"
 #include "KOReaderSyncClient.h"
 #include "homesync/QuietWifi.h"
@@ -320,6 +321,9 @@ void enterDeepSleep(bool fromTimeout = false) {
   Storage.prepareForDeepSleep();
   LOG_DBG("MAIN", "Entering deep sleep");
 
+#if HOMESYNC
+  homesync::nightly::armTimer();
+#endif
   powerManager.startDeepSleep(gpio);
 }
 
@@ -471,6 +475,18 @@ void setup() {
   UITheme::getInstance().reload();
   ButtonNavigator::setMappedInputManager(mappedInputManager);
 
+#if HOMESYNC
+  // Nightly update wake (or the reboot after its install): no light, no
+  // display, no UI; the panel keeps the sleep screen.
+  if (homesync::nightly::isNightlyBoot()) {
+    homesync::nightly::run(powerManager.getBatteryPercentage(), gpio.isUsbConnected());
+    halTiltSensor.deepSleep();
+    Storage.prepareForDeepSleep();
+    homesync::nightly::armTimer();
+    powerManager.startDeepSleep(gpio);
+  }
+#endif
+
   // Brightness and warmth are always restored. A normal wake starts with the
   // light off unless Restore Light on Wake is enabled; silent maintenance
   // reboots replay the live state captured at restart, so they neither go dark
@@ -489,6 +505,9 @@ void setup() {
       if (!wakeHoldVerified && SETTINGS.shortPwrBtn != CrossPointSettings::SHORT_PWRBTN::SLEEP) {
         LOG_DBG("MAIN", "Power-button wake not held through verification, sleeping");
         Storage.prepareForDeepSleep();
+#if HOMESYNC
+        homesync::nightly::armTimer();
+#endif
         powerManager.startDeepSleep(gpio);
       }
       wakePowerReleasePending = true;
