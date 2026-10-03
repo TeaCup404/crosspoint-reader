@@ -464,3 +464,10 @@ void RenderLock::unlock() {
  *
  */
 bool RenderLock::peek() { return xQueuePeek(activityManager.renderingMutex, NULL, 0) != pdTRUE; };
+
+bool ActivityManager::onPlainScreen() const {
+  if (!currentActivity) return true;
+  const std::string& n = currentActivity->name;
+  return n == "Home" || n == "EpubReader" || n == "XtcReader" || n == "Library" || n == "FileBrowser" ||
+         n == "Settings";
+}

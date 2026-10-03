@@ -23,6 +23,7 @@
 #include "components/UITheme.h"
 #include "components/UiAppHelpers.h"  // list icons for the compare rows
 #include "fontIds.h"
+#include "homesync/WifiLinger.h"
 
 namespace fui = freeink::ui;
 
@@ -360,7 +361,10 @@ void KOReaderSyncActivity::performUpload() {
   const auto result = KOReaderSyncClient::updateProgress(progress);
 
   // Drop the radio while user reads the result; full teardown happens at silent reboot.
+  // (homesync keeps the link for the Wi-Fi linger instead; see WifiLinger.h.)
+#if !HOMESYNC
   esp_wifi_stop();
+#endif
 
   if (result != KOReaderSyncClient::OK) {
     {
@@ -415,6 +419,7 @@ void KOReaderSyncActivity::onExit() {
   Activity::onExit();
 
   if (wifiActivated) {
+    if (keepWifiAfterUse()) return;
     WiFi.disconnect(false);
     delay(30);
     silentRestartToReader();

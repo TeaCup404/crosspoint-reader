@@ -42,6 +42,7 @@
 #include "homesync/HomeSync.h"
 #include "homesync/KoAuto.h"
 #include "homesync/AutoLight.h"
+#include "homesync/WifiLinger.h"
 #include "KOReaderSyncClient.h"
 #include "homesync/QuietWifi.h"
 #include "network/OtaUpdater.h"
@@ -989,6 +990,7 @@ void loop() {
 
 #if HOMESYNC
   homesync::autolight::tick();
+  wifiLingerTick(activityManager.onPlainScreen());
 #endif
   const unsigned long activityStartTime = millis();
   activityManager.loop();

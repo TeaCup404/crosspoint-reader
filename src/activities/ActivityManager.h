@@ -104,6 +104,8 @@ class ActivityManager {
   bool preventAutoSleep() const;
   bool requiresExclusiveStorageLoop() const;
   bool isReaderActivity() const;
+  // Screens that never use Wi-Fi (Home, a book, Library, Files, Settings).
+  bool onPlainScreen() const;
   void beforeSleep();
   bool handleForcedRefresh();
   bool skipLoopDelay() const;

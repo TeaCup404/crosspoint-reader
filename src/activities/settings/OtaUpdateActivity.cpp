@@ -10,6 +10,7 @@
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "network/OtaUpdater.h"
+#include "homesync/WifiLinger.h"
 
 void OtaUpdateActivity::onWifiSelectionComplete(const bool success) {
   if (!success) {
@@ -93,6 +94,7 @@ void OtaUpdateActivity::onExit() {
   // here with wifi still active; silent-restart to free the LWIP/mbedTLS
   // fragmentation, same as the other wifi activities.
   if (WiFi.getMode() != WIFI_MODE_NULL) {
+    if (keepWifiAfterUse()) return;
     WiFi.disconnect(false);
     delay(30);
     silentRestart();

@@ -12,6 +12,7 @@
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "homesync/WifiLinger.h"
 
 void KOReaderAuthActivity::onWifiSelectionComplete(const bool success) {
   if (!success) {
@@ -72,6 +73,7 @@ void KOReaderAuthActivity::onExit() {
   Activity::onExit();
 
   if (WiFi.getMode() != WIFI_MODE_NULL) {
+    if (keepWifiAfterUse()) return;
     WiFi.disconnect(false);
     delay(30);
     silentRestart();

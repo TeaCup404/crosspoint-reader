@@ -12,6 +12,7 @@
 #include "homesync/QuietWifi.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/UITheme.h"
+#include "homesync/WifiLinger.h"
 
 namespace fui = freeink::ui;
 
@@ -75,6 +76,7 @@ void HomeSyncActivity::onExit() {
   // Same teardown as the OPDS browser: a silent reboot returns the heap the
   // Wi-Fi stack fragmented.
   if (WiFi.getMode() != WIFI_MODE_NULL) {
+    if (keepWifiAfterUse()) return;
     WiFi.disconnect(false);
     delay(30);
     silentRestart();

@@ -30,6 +30,7 @@
 #include "util/OpdsFilename.h"
 #include "util/StringUtils.h"
 #include "util/UrlUtils.h"
+#include "homesync/WifiLinger.h"
 
 namespace fui = freeink::ui;
 
@@ -80,6 +81,7 @@ void OpdsBookBrowserActivity::onExit() {
   navigationHistory.clear();
 
   if (WiFi.getMode() != WIFI_MODE_NULL) {
+    if (keepWifiAfterUse()) return;
     WiFi.disconnect(false);
     delay(30);
     silentRestart();

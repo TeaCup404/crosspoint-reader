@@ -22,6 +22,7 @@
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "network/HttpDownloader.h"
+#include "homesync/WifiLinger.h"
 
 namespace fui = freeink::ui;
 
@@ -81,6 +82,7 @@ void FontDownloadActivity::onExit() {
   Activity::onExit();
 
   if (WiFi.getMode() != WIFI_MODE_NULL) {
+    if (keepWifiAfterUse()) return;
     WiFi.disconnect(false);
     delay(30);
     silentRestart();

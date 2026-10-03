@@ -20,6 +20,7 @@
 #include "homesync/HomeSync.h"
 #include "homesync/Tailnet.h"
 #include "network/HttpDownloader.h"
+#include "homesync/WifiLinger.h"
 
 namespace fui = freeink::ui;
 
@@ -64,6 +65,7 @@ void ServerDashActivity::onEnter() {
 
 void ServerDashActivity::onExit() {
   Activity::onExit();
+  if (keepWifiAfterUse()) return;
   homesync::tailnet::down();
   if (WiFi.getMode() != WIFI_MODE_NULL) {
     WiFi.disconnect(false);

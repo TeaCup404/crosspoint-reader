@@ -14,6 +14,7 @@
 #include "Diag.h"
 #include "QuietWifi.h"
 #include "Tailnet.h"
+#include "WifiLinger.h"
 #include "network/HttpDownloader.h"
 
 namespace homesync::koauto {
@@ -99,7 +100,7 @@ void pullTask(void*) {
       LOG_INF("KOAUTO", "Pull: nothing newer (%s)", KOReaderSyncClient::errorString(status));
     }
   }
-  if (result != PullResult::RemoteAhead) {
+  if (result != PullResult::RemoteAhead && !keepWifiAfterUse()) {
     tailnet::down();
     WiFi.disconnect(true);
     WiFi.mode(WIFI_OFF);

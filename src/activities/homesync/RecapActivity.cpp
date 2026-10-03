@@ -16,6 +16,7 @@
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/UITheme.h"
 #include "network/HttpDownloader.h"
+#include "homesync/WifiLinger.h"
 
 namespace fui = freeink::ui;
 
@@ -82,6 +83,7 @@ void RecapActivity::onEnter() {
 void RecapActivity::onExit() {
   Activity::onExit();
   if (wifiUsed || WiFi.getMode() != WIFI_MODE_NULL) {
+    if (keepWifiAfterUse()) return;
     WiFi.disconnect(false);
     delay(30);
     silentRestartToReader();

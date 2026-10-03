@@ -14,6 +14,7 @@
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "homesync/WifiLinger.h"
 
 void ClockSyncActivity::onEnter() {
   Activity::onEnter();
@@ -33,6 +34,7 @@ void ClockSyncActivity::onExit() {
   Activity::onExit();
 
   if (shouldTearDownWifiOnExit && WiFi.getMode() != WIFI_MODE_NULL) {
+    if (keepWifiAfterUse()) return;
     WiFi.disconnect(false);
     delay(30);
     silentRestart();
