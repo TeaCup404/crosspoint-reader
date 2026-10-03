@@ -6,7 +6,6 @@
 #include <Logging.h>
 #include <WiFi.h>
 #include <esp_sleep.h>
-#include <esp_system.h>
 
 #include "Diag.h"
 #include "QuietWifi.h"
@@ -31,6 +30,13 @@ void wifiOff() {
   WiFi.mode(WIFI_OFF);
 }
 
+// One line per night on reader-hub (diag/<date>-nightly.txt): sent now when
+// online, else with the next report.
+void report(const char* what) {
+  diag::record("nightly", what);
+  if (WiFi.status() == WL_CONNECTED) diag::flush();
+}
+
 }  // namespace
 
 bool isNightlyBoot() {
@@ -46,33 +52,36 @@ void run(const uint16_t batteryPercent, const bool usbPower) {
   }
   if (batteryPercent < MIN_BATTERY && !usbPower) {
     LOG_INF("NIGHT", "Battery %u%%, skipping tonight", batteryPercent);
+    report("skipped: low battery");
     return;
   }
   if (!quietConnect(WIFI_JOIN_MS)) {
     LOG_INF("NIGHT", "No known Wi-Fi, skipping tonight");
+    report("skipped: no known Wi-Fi");
     wifiOff();
     return;
   }
-  if (diag::pending()) diag::flush();
 
   OtaUpdater ota;
   const auto rc = ota.checkForUpdate();
   if (rc != OtaUpdater::OK || !ota.isUpdateNewer()) {
     LOG_INF("NIGHT", "No newer firmware (rc=%d, latest %s)", static_cast<int>(rc), ota.getLatestVersion().c_str());
+    report(rc == OtaUpdater::OK ? "up to date" : "update check failed");
     wifiOff();
     return;
   }
   LOG_INF("NIGHT", "Installing %s", ota.getLatestVersion().c_str());
+  report("installing an update");
   const auto irc = ota.installUpdate();
   if (irc != OtaUpdater::OK) {
     LOG_ERR("NIGHT", "Install failed: %d", static_cast<int>(irc));
-    diag::record("nightly", "update install failed");
+    report("update install failed");
     wifiOff();
     return;
   }
   wifiOff();
   installRebootMagic = INSTALL_REBOOT_MAGIC;
-  esp_restart();
+  ESP.restart();
 }
 
 void armTimer() {
